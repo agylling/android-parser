@@ -1,0 +1,5 @@
+wheel
+securicad-enterprise==0.3.2
+securicad-model
+pyecore
+typer
