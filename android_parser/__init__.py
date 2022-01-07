@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, NamedTuple
-from .android_parser import AndroidParser
+from .main import AndroidParser
 
 __version__ = "0.0.1"
 
