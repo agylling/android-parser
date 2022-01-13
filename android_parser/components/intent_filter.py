@@ -5,19 +5,14 @@ from dataclasses import dataclass, field
 from android_parser.utilities import (
     xml as _xml,
 )
-from android_parser.components.android_classes import IntentType, Data
+from android_parser.components.android_classes import IntentType, Data, Base
+
+if TYPE_CHECKING:
+    from android_parser.main import AndroidParser
 
 
-def collect_intent_filters(self, parent: Element) -> List["IntentFilter"]:
-    """Returns"""
-    intent_filters = []
-    for intent_filter in parent.findall("intent-filter"):
-        intent_filters.append(IntentFilter.from_xml(intent_filter))
-    return intent_filters
-
-
-@dataclass
-class IntentFilter:
+@dataclass(eq=True)
+class IntentFilter(Base):
     priority: int = field(default=0)
     order: int = field(default=0)
     actions: List[str] = field(default_factory=list)
@@ -26,8 +21,12 @@ class IntentFilter:
     uris: List[str] = field(default_factory=list)
     parent_type: str = field(default=None)
 
+    @property
+    def name(self) -> str:
+        return f"IntentFilter"
+
     def __post_init__(self):
-        self.uris = self.__create_uris()
+        object.__setattr__(self, "uris", self.__create_uris())
 
     def __create_uris(self) -> List[str]:
         """Creates a list of URI strings that can be matched against the data tags of the intent filter
@@ -110,6 +109,20 @@ class IntentFilter:
             parent_type=parent_type,
         )
 
+    def collect_intent_filters(parent: Element) -> List["IntentFilter"]:
+        """Returns a list of IntentFilter objects found within the parent xml tag
+        \n Keyword arguments:
+        \t parent - an android component xml tag, e.g. service, activity, receiver or provider
+        \n Returns
+            A list if IntentFilter objects
+        """
+        intent_filters = []
+        for intent_filter in parent.findall("intent-filter"):
+            intent_filters.append(
+                IntentFilter.from_xml(intent_filter, parent_type=parent.tag)
+            )
+        return intent_filters
+
     def print_partial_intent(self) -> List[str]:
         """Prints the intent filter part of an intent, meaning the actions, categories and uris\n"""
         # https://developer.android.com/studio/command-line/adb#IntentSpec
@@ -120,3 +133,36 @@ class IntentFilter:
                     # mime type flags (-t) are already hardcoded into the uri
                     partial_intent_strings.add(f"-a {action} -c {category} -d {uri}")
         return list(partial_intent_strings)
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
+
+        def category_asset_type(name: str) -> str:
+            if name.endswith("category.BROWSABLE"):
+                return "CategoryDefault"
+            elif name.endswith("category.DEFAULT"):
+                return "CategoryBrowsable"
+            else:
+                return "Category"
+
+        def action_asset_type(name: str) -> str:
+            if name.endswith("action.VIEW"):
+                return "ACTION_VIEW"
+            else:
+                return "Action"
+
+        parser.create_object(asset_type="IntentFilter", python_obj=self)
+        for category in self.categories:
+            asset_type = category_asset_type(category)
+            parser.create_object(asset_type=asset_type, name=category)
+        for action in self.actions:
+            asset_type = action_asset_type(action)
+            parser.create_object(asset_type=asset_type, name=action)
+        for uri in self.uris:
+            parser.create_object(asset_type="Data", name=uri)
+        # TODO order
+        # TODO priority

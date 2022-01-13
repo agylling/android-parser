@@ -6,10 +6,12 @@ from android_parser.utilities import (
     xml as _xml,
 )
 from android_parser.components.android_classes import BaseComponent, MetaData
-from android_parser.components.intent_filter import IntentFilter
+from android_parser.components.intent_filter import IntentFilter, IntentType
+from android_parser.components.android_classes import Permission, Base
 
 if TYPE_CHECKING:
     from android_parser.components.application import Application
+    from android_parser.main import AndroidParser
 
 
 @dataclass()
@@ -25,6 +27,8 @@ class Provider(BaseComponent):
 
     def __post_init__(self):
         super().__post_init__()
+        for obj in [*self.path_permissions, *self.grant_uri_permissions]:
+            obj.parent = self
 
     @property
     def write_permission(self) -> Optional[str]:
@@ -33,6 +37,11 @@ class Provider(BaseComponent):
     @property
     def read_permission(self) -> Optional[str]:
         return self.attributes.get("readPermission")
+
+    @property
+    def scad_asset_type(self) -> str:
+        """The objects corresponding androidLang scad asset type"""
+        return "ContentProvider"
 
     def from_xml(provider: Element) -> "Provider":
         """Creates a Provider object out of a xml provider tag \n
@@ -52,11 +61,7 @@ class Provider(BaseComponent):
         meta_datas = []
         for meta_data in provider.findall("meta-data"):
             meta_datas.append(MetaData.from_xml(meta_data))
-        intent_filters = []
-        for intent_filter in provider.findall("intent-filter"):
-            intent_filters.append(
-                IntentFilter.from_xml(intent_filter, parent_type=provider.tag)
-            )
+        intent_filters = IntentFilter.collect_intent_filters(parent=provider)
         path_permissions = []
         for path_permission in provider.findall("path-permission"):
             path_permissions.append(PathPermission.from_xml(path_permission))
@@ -65,7 +70,7 @@ class Provider(BaseComponent):
             greant_uri_permissions.append(
                 GrantURIPermission.from_xml(grant_uri_permission)
             )
-        Provider(
+        return Provider(
             attributes=attribs,
             meta_datas=meta_datas,
             intent_filters=intent_filters,
@@ -80,9 +85,19 @@ class Provider(BaseComponent):
             )
         raise NotImplemented
 
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser=parser)
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
+        for path_perm in self.path_permissions:
+            path_perm.create_scad_objects(parser=parser)
 
-@dataclass(frozen=True)
-class PathPermission:
+
+@dataclass(eq=True)
+class PathPermission(Base):
     attributes: dict = field(default_factory=dict)
     paths: List[str] = field(default_factory=list)
 
@@ -121,8 +136,33 @@ class PathPermission:
         ]
         return [x for x in potential_paths if x]
 
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        """creates the androidLang securiCAD objects beloning to the component
+        \n Keyword arguments:
+        \t parser - an AndroidParser instance
+        """
+        parser.create_object(asset_type="PathPermission", python_obj=self)
+        # paths are handled in connect (searhing for directories, files etc.)
+        # write_permission
+        try:
+            manifest_obj = self.parent.manifest_parent
+        except AttributeError:
+            log.error(
+                f"Couldn't find the Manifest parent of PathPermission's Provider parent {self.parent.name}"
+            )
+            manifest_obj = None
+        if manifest_obj:
+            Permission.create_scad_android_permission(
+                parser=parser, name=self.write_permission, manifest_obj=manifest_obj
+            )
+            # read_permission
+            Permission.create_scad_android_permission(
+                parser=parser, name=self.read_permission, manifest_obj=manifest_obj
+            )
+        # TODO: URIPermissions
 
-class GrantURIPermission:
+
+class GrantURIPermission(Base):
     attributes: dict = field(default_factory=dict)
     paths: List[str] = field(default_factory=list)
 

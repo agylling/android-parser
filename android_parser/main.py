@@ -1,4 +1,5 @@
 from __future__ import annotations
+from mimetypes import init
 import sys
 import typer
 import datetime
@@ -8,31 +9,73 @@ import glob
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Any, Tuple
+from typing import TYPE_CHECKING, BinaryIO, Dict, List, Optional, Any, Tuple, Union
+
+from typer.models import DefaultType
 from android_parser.utilities import constants as constants
-from android_parser.components import (
-    manifest as manifest,
-    application as application,
-    intent_filter as intent_filter,
-)
+from android_parser.components import manifest as manifest
 from android_parser.utilities.log import log
-from securicad.model import Model, json_serializer, es_serializer, scad_serializer
+from securicad.model import (
+    Model,
+    json_serializer,
+    es_serializer,
+    scad_serializer,
+    object,
+)
 from securicad.model.exceptions import (
     InvalidAssetException,
     DuplicateAssociationException,
 )
 from securicad.langspec import Lang
 
+if TYPE_CHECKING:
+    from securicad.model.object import Object
+    from android_parser.components.application import Application
+    from android_parser.components.manifest import Manifest
+    from android_parser.components.provider import Provider
+    from android_parser.components.activity import Activity
+    from android_parser.components.service import Service
+    from android_parser.components.receiver import Receiver
+    from android_parser.components.android_classes import (
+        PermissionTree,
+        PermissionGroup,
+        Permission,
+    )
+
+    AnyClass = Union[
+        Object,
+        Application,
+        Provider,
+        Activity,
+        Service,
+        Receiver,
+        PermissionTree,
+        PermissionGroup,
+        Permission,
+    ]
+
 # import tqdm  # alternative progressbar
 @dataclass()
 class AndroidParser:
-    activities: Dict[str, "Activity"] = field(default_factory=dict)
-    manifests: Dict[str, "Manifest"] = field(default_factory=dict)
-    model: Model = field(default=None)
-    providers: Dict[str, "Provider"] = field(default_factory=dict)
-    receivers: Dict[str, "Receiver"] = field(default_factory=dict)
-    services: Dict[str, "Service"] = field(default_factory=dict)
-    pass
+    model: Model = field(default=None, init=False)
+    manifests: Dict[int, "Manifest"] = field(default_factory=dict, init=False)
+    # Key = package name
+    # api_levels: Dict[str:Object] = field(default_factory=dict, init=False)
+    # applications: Dict[Union[int, str], Object] = field(
+    #    default_factory=dict, init=False
+    # )
+    # permission_trees: Dict[str, "Object"] = field(default_factory=dict, init=False)
+    # permission_groups: Dict[str, "Object"] = field(default_factory=dict, init=False)
+    # permissions: Dict[str, "Object"] = field(default_factory=dict, init=False)
+    # activities: Dict[Union[int, str], "Object"] = field(
+    #    default_factory=dict, init=False
+    # )
+    # providers: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
+    # receivers: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
+    # services: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
+    obj_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
+    # An incremental id variable for objects
+    object_id: int = field(default=0, init=False)
 
     def write_model_file(
         self, output_path: Path, mar_path: Optional[Path] = None
@@ -99,7 +142,7 @@ class AndroidParser:
         self._parse()
 
         # Validate model
-        self.model.validate()
+        # self.model.validate()
 
         # Save model to file
         if ".json" in output_path.suffix.lower():
@@ -137,6 +180,7 @@ class AndroidParser:
 
     def _parse(self) -> None:
         # create scad objects
+        self.create_scad_objects()
         # connect scad objects
         # generate default views
         return
@@ -148,6 +192,69 @@ class AndroidParser:
         root = xml_data.getroot()
         manifest_obj = manifest.collect_manifest(root)
         self.manifests[manifest_obj.package] = manifest_obj
+
+    def create_scad_objects(self) -> None:
+        """Creates the securiCAD asset objects within our model from the manifest data collected"""
+        for manifest in self.manifests.values():
+            manifest.create_objects(parser=self)
+
+    def create_associaton(
+        self, s_obj: "Object", t_obj: "Object", s_field: str, t_field: str
+    ) -> None:
+        """Creates an association between two securicad Objects
+        \n Keyword arguments:
+        \t s_obj - the source model Object
+        \t t_obj - the target/destination model Object
+        \t s_field - the s_obj's field name
+        \t t_field - thi t_obj's field name
+        """
+        if s_obj == t_obj:
+            return
+        try:
+            s_obj.field(s_field).connect(t_obj.field(t_field))
+        except DuplicateAssociationException:
+            pass
+        except InvalidAssetException as e:
+            log.error(e)
+        finally:
+            return
+
+    def create_object(
+        self,
+        asset_type: str,
+        python_obj: Optional[AnyClass] = None,
+        name: Optional[str] = None,
+    ) -> Optional[Object]:
+        """Helper function for creating an scad object. Functionality that is shared whenever creating an asset.
+        \n Keyword arguments:
+        \t asset_type - the androidLang asset to create
+        \t python_obj - the python class object containing that maps to the created scad object
+        \n Returns
+        \t An scad object or None
+        """
+        if not any([python_obj, name]):
+            log.error(
+                f"{__file__}: To create an scad object, provider either a python_obj or name. Trying to create an {asset_type} object"
+            )
+        # id = python_obj.id if python_obj else name
+        # if id in self.obj_id_to_scad_obj:
+        #    if asset_type != self.obj_id_to_scad_obj[id].asset_type:
+        #        log.error(
+        #            f"Need to correct indexing, {asset_type}:{python_obj.name if python_obj else name} and {self.obj_id_to_scad_obj[id]} are using the same id {id}"
+        #        )
+        #    log.info(
+        #        f"{id} already maps to an scad object {self.obj_id_to_scad_obj[id]}, skipping creating"
+        #    )
+        #    return None
+        if python_obj:
+            name = python_obj.name.split(".")[-1]
+        try:
+            scad_obj = self.model.create_object(asset_type=asset_type, name=name)
+            self.obj_id_to_scad_obj[self.object_id] = scad_obj
+            self.object_id += 1
+            return scad_obj
+        except InvalidAssetException as e:
+            log.warning(e)
 
 
 app = typer.Typer(

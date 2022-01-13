@@ -21,6 +21,11 @@ class Receiver(BaseComponent):
     def __post_init__(self):
         super().__post_init__()
 
+    @property
+    def scad_asset_type(self) -> str:
+        """The objects corresponding androidLang scad asset type"""
+        return "BroadcastReceiver"
+
     def from_xml(receiver: Element) -> "Receiver":
         """Creates an Receiver object out of a xml receiver tag \n
         Keyword arguments:
@@ -34,17 +39,13 @@ class Receiver(BaseComponent):
         meta_datas = []
         for meta_data in receiver.findall("meta-data"):
             meta_datas.append(MetaData.from_xml(meta_data))
-        intent_filters = []
-        for intent_filter in receiver.findall("intent-filter"):
-            intent_filters.append(
-                IntentFilter.from_xml(intent_filter, parent_type=receiver.tag)
-            )
+        intent_filters = IntentFilter.collect_intent_filters(parent=receiver)
         if intent_filters and not attribs.get("exported"):
             attribs["exported"] = True
         else:
             attribs.setdefault("exported", False)
 
-        Receiver(
+        return Receiver(
             attributes=attribs,
             meta_datas=meta_datas,
             intent_filters=intent_filters,
@@ -62,3 +63,12 @@ class Receiver(BaseComponent):
             raise (NotImplemented)
         elif intent_type == IntentType.EXPLICIT:
             raise (NotImplemented)
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser=parser)
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
+        parser.create_object(asset_type=self.scad_asset_type, python_obj=self)

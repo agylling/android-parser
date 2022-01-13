@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element
-from typing import Optional, List, TYPE_CHECKING
+from typing import Union, List, TYPE_CHECKING
 from android_parser.components.provider import Provider
 from android_parser.components.activity import Activity
 from android_parser.components.service import Service
@@ -10,35 +10,42 @@ from android_parser.utilities import (
     xml as _xml,
     constants as constants,
 )
+from android_parser.components.android_classes import Base
 
 if TYPE_CHECKING:
     from android_parser.components.manifest import Manifest
-
-
-def collect_application(self, application):
-    pass
+    from android_parser.main import AndroidParser
+AndroidComponent = Union[Activity, Provider, Service, Receiver]
 
 
 @dataclass()
-class Application:
+class Application(Base):
     attributes: dict = field(default_factory=dict)
     # Components
-    __manifest_parent: "Manifest" = field(default=None)
+    _parent: "Manifest" = field(default=None)
     activities: List["Activity"] = field(default_factory=list)  #
     providers: List["Provider"] = field(default_factory=list)
     services: List["Service"] = field(default_factory=list)
     receivers: List["Receiver"] = field(default_factory=list)
 
     @property
-    def manifest_parent(self) -> "Manifest":
-        return self.__manifest_parent
+    def name(self) -> str:
+        return self.attributes.get("name")
 
-    @manifest_parent.setter
-    def manifest_parent(self, manifest: "Manifest") -> None:
-        self.__manifest_parent = manifest
+    @property
+    def process(self) -> str:
+        return self.attributes.get("process", self.name)
 
     def __post_init__(self):
-        pass
+        for component in [
+            *self.providers,
+            *self.services,
+            *self.activities,
+            *self.receivers,
+        ]:
+            if not component:
+                continue
+            component.parent = self
 
     def from_xml(application: Element, parent_type: str = None) -> "Application":
         """Creates an Application object out of a application tag \n
@@ -71,10 +78,51 @@ class Application:
             activities.append(Activity.from_xml(activity=activity))
 
         application_obj = Application(
-            attributes=attribs, providers=providers, activities=activities
+            attributes=attribs,
+            providers=providers,
+            activities=activities,
+            services=services,
+            receivers=receivers,
         )
-        for component in [*providers, *services, *activities, *receivers]:
-            if not component:
-                continue
-            component.parent = application_obj
         return application_obj
+
+    def collect_applications(tag: Element) -> List["Application"]:
+        """Collects all application tags below the provided xml tag.
+        \n Keyword arguments:
+        \t tag - a manifest xml tag
+        \n Returns:
+        \t A list of Application objects
+        """
+        applications = []
+        for app_tag in tag.findall("application"):
+            applications.append(
+                Application.from_xml(application=app_tag, parent_type=tag.tag)
+            )
+        return applications
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        """creates an Application androidLang securiCAD object
+        \nKeyword arguments:
+        \t parser - an AndroidParser instance
+        """
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
+        app_scad_obj = parser.create_object(asset_type="App", python_obj=self)
+        # UID (Process)
+        parser.create_object(asset_type="UID", name=self.process)
+        # ContentResolver
+        parser.create_object(
+            asset_type="ContentResolver", name=f"ContentResolver-{self.name}"
+        )
+        # Storage
+        # Components
+        for component in [
+            *self.activities,
+            *self.services,
+            *self.receivers,
+            *self.providers,
+        ]:
+            component.create_scad_objects(parser=parser)

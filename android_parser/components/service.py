@@ -19,6 +19,11 @@ class Service(BaseComponent):
     def __post_init__(self):
         super().__post_init__()
 
+    @property
+    def scad_asset_type(self) -> str:
+        """The objects corresponding androidLang scad asset type"""
+        return "Service"
+
     def from_xml(service: Element) -> "Service":
         """Creates an Service object out of a xml service tag \n
         Keyword arguments:
@@ -33,17 +38,13 @@ class Service(BaseComponent):
         meta_datas = []
         for meta_data in service.findall("meta-data"):
             meta_datas.append(MetaData.from_xml(meta_data))
-        intent_filters = []
-        for intent_filter in service.findall("intent-filter"):
-            intent_filters.append(
-                IntentFilter.from_xml(intent_filter, parent_type=service.tag)
-            )
+        intent_filters = IntentFilter.collect_intent_filters(parent=service)
         if intent_filters and attribs.get("exported") == None:
             attribs["exported"] = True
         else:
             attribs.setdefault("exported", False)
 
-        Service(
+        return Service(
             attributes=attribs,
             meta_datas=meta_datas,
             intent_filters=intent_filters,
@@ -61,3 +62,12 @@ class Service(BaseComponent):
             raise (NotImplemented)
         elif intent_type == IntentType.EXPLICIT:
             raise (NotImplemented)
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser=parser)
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
+        parser.create_object(asset_type=self.scad_asset_type, python_obj=self)
