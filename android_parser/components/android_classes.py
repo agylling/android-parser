@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from android_parser.components.application import Application
     from android_parser.main import AndroidParser
     from securicad.model.object import Object
-    from android_parser.components.intent_filter import IntentFilter
+    from android_parser.components.intent_filter import IntentFilter, Intent
 
 
 @dataclass()
@@ -279,7 +279,7 @@ class Permission(Base):
         return asset_type
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
-        """creates the androidLang securiCAD objects beloning to the component
+        """creates the androidLang securiCAD objects belonging to the component
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
@@ -369,6 +369,35 @@ class UsesPermission(Base):
 
 
 @dataclass
+class UsesPermissionSDK23(UsesPermission):
+    # https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element
+
+    def from_xml(uses_permission_sdk_23: Element) -> "UsesPermission":
+        """Creates an UsesPermissionSDK23 object out of a uses-permission-sdk-23 tag \n
+        Keyword arguments:
+        \t uses-permission: An uses-permission-sdk-23 Element object
+        Returns:
+        \t UsesPermissionSDK23 object
+        """
+        attribs = _xml.get_attributes(tag=uses_permission_sdk_23)
+        return UsesPermissionSDK23(attributes=attribs)
+
+    def collect_uses_permissions(tag: Element) -> List["UsesPermission"]:
+        """Collects all uses-permission-sdk-23 tags below the provided xml tag.
+        \n Keyword arguments:
+        \t tag - a manifest xml tag
+        \n Returns:
+        \t A list of UsesPermissionSDK23 objects
+        """
+        uses_permissions = []
+        for uses_permission in tag.findall("uses-permission"):
+            uses_permissions.append(
+                UsesPermissionSDK23.from_xml(uses_permission_sdk_23=uses_permission)
+            )
+        return uses_permissions
+
+
+@dataclass
 class BaseComponent(Base):
     # Shared attributes between Activity, BroadcastReceiver, ContentProvider and Service
     attributes: dict = field(default_factory=dict)
@@ -424,7 +453,7 @@ class BaseComponent(Base):
         return self.parent.parent
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
-        """creates the androidLang securiCAD objects beloning to the component
+        """creates the androidLang securiCAD objects belonging to the component
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """

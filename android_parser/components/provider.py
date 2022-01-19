@@ -137,7 +137,7 @@ class PathPermission(Base):
         return [x for x in potential_paths if x]
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
-        """creates the androidLang securiCAD objects beloning to the component
+        """creates the androidLang securiCAD objects belonging to the component
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """

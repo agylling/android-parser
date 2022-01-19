@@ -9,6 +9,27 @@ from android_parser.components.android_classes import IntentType, Data, Base
 
 if TYPE_CHECKING:
     from android_parser.main import AndroidParser
+    from android_parser.components.application import AndroidComponent
+
+
+@dataclass
+class Intent(Base):
+    targets: List[AndroidComponent] = field(default_factory=list, init=False)
+
+    @property
+    def name(self) -> str:
+        return "Intent"
+
+    @property
+    def asset_type(self) -> str:
+        return "Intent"
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        """creates an Application androidLang securiCAD object
+        \nKeyword arguments:
+        \t parser - an AndroidParser instance
+        """
+        parser.create_object(python_obj=self)
 
 
 @dataclass(eq=True)

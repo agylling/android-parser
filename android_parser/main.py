@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, BinaryIO, Dict, List, Optional, Any, Tuple, Un
 
 from typer.models import DefaultType
 from android_parser.utilities import constants as constants
-from android_parser.components import manifest as manifest
+from android_parser.components import (
+    filesystem as filesystem,
+    manifest as manifest,
+    hardware as hardware,
+)
 from android_parser.utilities.log import log
 from securicad.model import (
     Model,
@@ -31,6 +35,8 @@ from securicad.langspec import Lang
 if TYPE_CHECKING:
     from securicad.model.object import Object
     from android_parser.components.application import Application
+    from android_parser.components.filesystem import FileSystem
+    from android_parser.components.hardware import Device
     from android_parser.components.manifest import Manifest
     from android_parser.components.provider import Provider
     from android_parser.components.activity import Activity
@@ -58,7 +64,9 @@ if TYPE_CHECKING:
 @dataclass()
 class AndroidParser:
     model: Model = field(default=None, init=False)
-    manifests: Dict[int, "Manifest"] = field(default_factory=dict, init=False)
+    manifests: Dict[str, "Manifest"] = field(default_factory=dict, init=False)
+    filesystem: "FileSystem" = field(default=None, init=False)
+    device: "Device" = field(default=None, init=False)
     # Key = package name
     # api_levels: Dict[str:Object] = field(default_factory=dict, init=False)
     # applications: Dict[Union[int, str], Object] = field(
@@ -180,7 +188,7 @@ class AndroidParser:
 
     def _parse(self) -> None:
         # create scad objects
-        self.create_scad_objects()
+        self._create_scad_objects()
         # connect scad objects
         # generate default views
         return
@@ -188,17 +196,21 @@ class AndroidParser:
 
     def collect(self, input: BinaryIO) -> None:
         """Collects information of an AndroidManifest file wrapped in a Manifest object"""
+        self.filesystem = filesystem.collect_filesystem()
+        self.device = hardware.Device()
         xml_data = ET.parse(input)
         root = xml_data.getroot()
-        manifest_obj = manifest.collect_manifest(root)
+        manifest_obj = manifest.collect_manifest(root, self)
         self.manifests[manifest_obj.package] = manifest_obj
 
-    def create_scad_objects(self) -> None:
+    def _create_scad_objects(self) -> None:
         """Creates the securiCAD asset objects within our model from the manifest data collected"""
+        self.filesystem.create_scad_objects(parser=self)
+        self.device.create_scad_objects(parser=self)
         for manifest in self.manifests.values():
             manifest.create_objects(parser=self)
 
-    def create_associaton(
+    def _create_associaton(
         self, s_obj: "Object", t_obj: "Object", s_field: str, t_field: str
     ) -> None:
         """Creates an association between two securicad Objects
@@ -221,32 +233,32 @@ class AndroidParser:
 
     def create_object(
         self,
-        asset_type: str,
         python_obj: Optional[AnyClass] = None,
+        asset_type: Optional[str] = None,
         name: Optional[str] = None,
     ) -> Optional[Object]:
         """Helper function for creating an scad object. Functionality that is shared whenever creating an asset.
         \n Keyword arguments:
-        \t asset_type - the androidLang asset to create
         \t python_obj - the python class object containing that maps to the created scad object
-        \n Returns
+        \t asset_type - the androidLang asset to create (takes precedence over python_obj.asset_type)
+        \t name - the name of the object if python_obj isn't provided
+        \n asset_type and name can be ignored if python_obj has the corresponding attribute
+        \n Returns:
         \t An scad object or None
         """
         if not any([python_obj, name]):
             log.error(
                 f"{__file__}: To create an scad object, provider either a python_obj or name. Trying to create an {asset_type} object"
             )
-        # id = python_obj.id if python_obj else name
-        # if id in self.obj_id_to_scad_obj:
-        #    if asset_type != self.obj_id_to_scad_obj[id].asset_type:
-        #        log.error(
-        #            f"Need to correct indexing, {asset_type}:{python_obj.name if python_obj else name} and {self.obj_id_to_scad_obj[id]} are using the same id {id}"
-        #        )
-        #    log.info(
-        #        f"{id} already maps to an scad object {self.obj_id_to_scad_obj[id]}, skipping creating"
-        #    )
-        #    return None
-        if python_obj:
+            return
+        if not any([hasattr(python_obj, "asset_type"), asset_type]):
+            log.error(
+                f"{__file__}: To create an scad object, the provided python_obj must have an asset_type property or asset_type needs to be explicitly provided AndroidParser().create_object(...)"
+            )
+            return
+        if hasattr(python_obj, "asset_type") and not asset_type:
+            asset_type = python_obj.asset_type
+        if hasattr(python_obj, "name"):
             name = python_obj.name.split(".")[-1]
         try:
             scad_obj = self.model.create_object(asset_type=asset_type, name=name)

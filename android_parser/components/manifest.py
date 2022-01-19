@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element
-from typing import List, Tuple, TYPE_CHECKING, Dict
+from typing import List, Tuple, TYPE_CHECKING, Dict, Optional
 from android_parser.utilities.log import log
 from dataclasses import dataclass, field
 from android_parser.utilities import (
@@ -13,26 +13,30 @@ from android_parser.components.android_classes import (
     Permission,
     PermissionGroup,
     UsesPermission,
+    UsesPermissionSDK23,
     PermissionTree,
 )
 
 if TYPE_CHECKING:
     from android_parser.main import AndroidParser
     from securicad.model.object import Object
+    from android_parser.components.filesystem import FileSystem
 
 
-def collect_manifest(manifest: Element) -> "Manifest":
+def collect_manifest(manifest: Element, parser: "AndroidParser") -> "Manifest":
     """Creates a Manifest object out of a manifest xml object
     \nKeyword arguments:
     \t manifest - a manifest xml Element
+    \t parser - The AndroidParser initiaing the parsing of the manifest
     \nReturns:
     \t A Manifest object
     """
-    return Manifest.from_xml(manifest)
+    return Manifest.from_xml(manifest, parser)
 
 
 @dataclass()
 class Manifest:
+    _parser: "AndroidParser" = field()
     attributes: dict = field(default_factory=dict)
     permissions: List[Permission] = field(default_factory=list)
     scad_permission_objs: Dict[str, "Object"] = field(default_factory=dict, init=False)
@@ -43,6 +47,7 @@ class Manifest:
     applications: List["Application"] = field(default_factory=list)
     _target_sdk_version: int = field(default=None)
     _min_sdk_version: int = field(default=None)
+    _api_scad_objs: Dict[str, "Object"] = field(default_factory=dict, init=False)
     _package: str = field(default=None, init=False)
 
     def __post_init__(self):
@@ -58,6 +63,8 @@ class Manifest:
             *self.permission_trees,
         ]:
             obj.parent = self
+        for application in self.applications:
+            application.create_app_storage()
 
     def __set_api_levels(self) -> List[str]:
         """Lists API level strings for each API level between min and target sdk version"""
@@ -75,10 +82,23 @@ class Manifest:
     def target_sdk_version(self) -> int:
         return self._target_sdk_version
 
-    def from_xml(manifest: Element) -> "Manifest":
+    @property
+    def parser(self) -> None:
+        return self._parser
+
+    @parser.setter
+    def parser(self, parser: "AndroidParser") -> None:
+        self._parser = parser
+
+    @property
+    def file_system(self) -> "FileSystem":
+        return self.parser.filesystem
+
+    def from_xml(manifest: Element, parser: "AndroidParser") -> "Manifest":
         """Creates an Application object out of a application tag \n
         Keyword arguments:
-        \t manifest: An manifest Element object
+        \t manifest - An manifest Element object
+        \t parser - The AndroidParser initiaing the parsing of the manifest
         Returns:
         \t Manifest object
         """
@@ -109,8 +129,7 @@ class Manifest:
         permissions = Permission.collect_permissions(tag=manifest)
         permission_groups = PermissionGroup.collect_permission_groups(tag=manifest)
         permission_trees = PermissionTree.collect_permission_trees(tag=manifest)
-        # TODO
-        # uses_permissions_sdk_23 = uses-permission-sdk-23
+        uses_permissions_23 = UsesPermissionSDK23.collect_uses_permissions(tag=manifest)
         # Uses Features
         manifest.findall("uses-feature")
         # Applications
@@ -118,10 +137,12 @@ class Manifest:
             tag=manifest
         )
         manifest_obj = Manifest(
+            _parser=parser,
             attributes=attribs,
             permissions=permissions,
             permission_groups=permission_groups,
             uses_permissions=uses_permissions,
+            uses_permissions_sdk_23=uses_permissions_23,
             permission_trees=permission_trees,
             _min_sdk_version=min_sdk,
             _target_sdk_version=target_sdk,
@@ -146,17 +167,20 @@ class Manifest:
         # API Levels
         for api_level in range(self.min_sdk_version, self.target_sdk_version + 1):
             name = f"API_LEVEL_{api_level}"
-            parser.create_object(asset_type=name, name=name)
+            api_scad_obj = parser.create_object(asset_type=name, name=name)
+            if api_scad_obj:
+                self._api_scad_objs[name] = api_scad_obj
         # Permissions
         for permission in self.permissions:
             permission.create_scad_objects(parser=parser)
         for uses_permission in self.uses_permissions:
             parser.create_object(
-                asset_type="PermissionTree", python_obj=uses_permission
+                asset_type="UsesPermission", python_obj=uses_permission
             )
         for uses_permission in self.uses_permissions_sdk_23:
-            # TODO
-            pass
+            parser.create_object(
+                asset_type="UsesPermission", python_obj=uses_permission
+            )
         # Permission Groups
         for permission_group in self.permission_groups:
             parser.create_object(
