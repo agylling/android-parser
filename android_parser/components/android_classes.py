@@ -1,3 +1,4 @@
+from concurrent.futures import process
 from dataclasses import dataclass, field
 from os import name
 from pyclbr import Class
@@ -41,90 +42,19 @@ class Base:
     def parent(self, parent: Any) -> None:
         self._parent = parent
 
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        """Creates the associations between the created scad objects
+        \n Keyword arguments:
+        \t parser - the AndroidParser instance that created the securiCAD objects
+        """
+        ...
 
-@dataclass()
-class Data(Base):
-    _scheme: Union[str, List[str], None] = field(default=None)
-    _host: Optional[str] = field(default=None)
-    _port: Optional[str] = field(default=None)
-    _path: Optional[str] = field(default=None)
-    _path_pattern: Optional[str] = field(default=None)
-    _path_prefix: Optional[str] = field(default=None)
-    _mime_type: Optional[str] = field(default=None)
-
-    def __post_init__(self):
-        """Follows the rules for acceptable URIs"""
-        self.uris = self.__create_uris()
-        if not self._scheme:
-            if self._mime_type:
-                object.__setattr__(self, "_scheme", ["content", "file"])
-            else:
-                object.__setattr__(self, "_scheme", "*")
-            self.__ignore_hosts()
-            self.__ignore_paths()
-        if not self._host:
-            self.__ignore_hosts()
-            self.__ignore_paths()
-        if self._port:
-            object.__setattr__(self, "_port", f":{self._port}")
-
-    def __ignore_hosts(self) -> None:
-        if self._host:
-            object.__setattr__(self, "_host", "*")
-        if self._port:
-            object.__setattr__(self, "_port", None)
-
-    def __ignore_paths(self) -> None:
-        if self._path:
-            object.__setattr__(self, "_path", None)
-        if self._path_pattern:
-            object.__setattr__(self, "_path_pattern", None)
-        if self._path_prefix:
-            object.__setattr__(self, "_path_prefix", None)
-
-    def __get_paths(self) -> List[str]:
-        """Combines all the path/pathPatterns/pathPrefixes into one list"""
-        possible_paths = [self._path, self._path_pattern, f"{self._path_prefix}*"]
-        return [x for x in possible_paths if x]
-
-    def get_uris(self) -> List[str]:
-        uris = set()
-        # Because mimeType can make it [file: content:]
-        if not isinstance(self._scheme, list):
-            schemes = [self._scheme]
-        else:
-            schemes = self._scheme
-        mime_type_extension = f" -t {self._mime_type}" if self._mime_type else ""
-        for scheme in schemes:
-            if scheme == "*":
-                uris.add(f"{scheme}{mime_type_extension}")
-                continue
-            if self.host == "*":
-                uris.add(f"{scheme}://{mime_type_extension}")
-            else:
-                possible_paths = [
-                    f"{scheme}://{self.host}{self.port if self.port else ''}/{x if x else ''}{mime_type_extension}"
-                    for x in [self.__get_paths()]
-                ]
-                for path in possible_paths:
-                    uris.add(path)
-        return list(uris)
-
-    @property
-    def scheme(self) -> Optional[str]:
-        return self._scheme
-
-    @property
-    def host(self) -> Optional[str]:
-        return self._host
-
-    @property
-    def port(self) -> Optional[str]:
-        return self._port
-
-    @property
-    def mime_type(self) -> Optional[str]:
-        return self._mime_type
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        """creates the androidLang securiCAD object(s) belonging to the object
+        \n Keyword arguments:
+        \t parser - an AndroidParser instance
+        """
+        ...
 
 
 class IntentType(Enum):
@@ -230,11 +160,11 @@ class Permission(Base):
         return self.attributes.get("name")
 
     @property
-    def permission_group(self) -> str:
+    def permission_group(self) -> Optional[str]:
         return self.attributes.get("permissionGroup")
 
     @property
-    def protection_level(self) -> str:
+    def protection_level(self) -> Optional[str]:
         return self.attributes.get("protectionLevel")
 
     @property
@@ -329,6 +259,20 @@ class Permission(Base):
         return permission_obj
 
 
+@dataclass()
+class UID(Base):
+    _name: str = field()
+    _parent: "Application" = field()
+
+    @property
+    def asset_type(self) -> str:
+        return "UID"
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+
 @dataclass(eq=True)
 class UsesPermission(Base):
     attributes: dict = field(default_factory=dict)
@@ -401,19 +345,23 @@ class UsesPermissionSDK23(UsesPermission):
 class BaseComponent(Base):
     # Shared attributes between Activity, BroadcastReceiver, ContentProvider and Service
     attributes: dict = field(default_factory=dict)
-    _process_is_private: Optional[bool] = field(default=None, repr=False, init=False)
+    _process_is_private: bool = field(default=False, repr=False, init=False)
     _parent: "Application" = field(default=None, init=False)
     # Shared tags
     meta_datas: List["MetaData"] = field(default_factory=list)
     intent_filters: List["IntentFilter"] = field(default_factory=list)
+    _process: Optional["UID"] = field(default=None, init=False)
 
     def __post_init__(self):
-        if self.process:
+        if self.attributes.get("process"):
             object.__setattr__(
                 self,
                 "_process_is_private",
-                True if self.process[0] == ":" else False,
+                True if self.attributes.get("process")[0] == ":" else False,
             )  # https://developer.android.com/guide/topics/manifest/service-element#proc
+            procces_name = self.attributes.get("process")
+            object.__setattr__(self, "_process", UID(_parent=self, _name=procces_name))
+
         for component in [*self.intent_filters, *self.meta_datas]:
             if not component:
                 continue
@@ -428,15 +376,15 @@ class BaseComponent(Base):
         return self.attributes.get("name")
 
     @property
-    def process(self) -> str:
-        return self.attributes.get("process")
+    def process(self) -> UID:
+        return self._process
 
     @property
     def process_is_private(self) -> bool:
         return self._process_is_private
 
     @property
-    def parent(self) -> Optional["Application"]:
+    def parent(self) -> "Application":
         return self._parent
 
     @parent.setter
@@ -444,7 +392,7 @@ class BaseComponent(Base):
         self._parent = parent
 
     @property
-    def scad_asset_type() -> str:
+    def asset_type() -> str:
         ...
 
     @property
@@ -461,17 +409,17 @@ class BaseComponent(Base):
         for intent_filter in self.intent_filters:
             intent_filter.create_scad_objects(parser=parser)
         # Permission
-        if self.permission:
+        if self.attributes.get("permission"):
             try:
                 manifest_obj = self.manifest_parent
                 if not hasattr(manifest_obj, "permissions"):
                     log.error(
-                        f"parent.parent of {self.name} of type {self.scad_asset_type} is not of type Manifest. Cannot determine package permissions"
+                        f"parent.parent of {self.name} of type {self.asset_type} is not of type Manifest. Cannot determine package permissions"
                     )
                     return
             except AttributeError:
                 log.error(
-                    f"Cannot reach the manifest parent of {self.name} of type {self.scad_asset_type}"
+                    f"Cannot reach the manifest parent of {self.name} of type {self.asset_type}"
                 )
                 return
             Permission.create_scad_android_permission(
@@ -481,4 +429,17 @@ class BaseComponent(Base):
             )
         # Process
         if self.process:
-            parser.create_object(asset_type="UID", name=self.process)
+            parser.create_object(python_obj=self.process)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        # Association Process
+        if self.attributes.get("process"):
+            process_scad_obj = parser.scad_id_to_scad_obj[self.process.id]
+            app_obj = self.parent
+            parser.create_associaton(
+                s_obj=process_scad_obj,
+                t_obj=app_obj,
+                s_field="app",
+                t_field="uid",
+            )
+        manifest_parent = self.manifest_parent

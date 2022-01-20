@@ -22,7 +22,7 @@ class Receiver(BaseComponent):
         super().__post_init__()
 
     @property
-    def scad_asset_type(self) -> str:
+    def asset_type(self) -> str:
         """The objects corresponding androidLang scad asset type"""
         return "BroadcastReceiver"
 
@@ -71,4 +71,7 @@ class Receiver(BaseComponent):
                 f"{__file__}: Cannot create an scad object without a valid parser"
             )
             return
-        parser.create_object(asset_type=self.scad_asset_type, python_obj=self)
+        parser.create_object(asset_type=self.asset_type, python_obj=self)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)

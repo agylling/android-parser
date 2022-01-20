@@ -81,7 +81,7 @@ class AndroidParser:
     # providers: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
     # receivers: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
     # services: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
-    obj_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
+    scad_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
     # An incremental id variable for objects
     object_id: int = field(default=0, init=False)
 
@@ -190,6 +190,7 @@ class AndroidParser:
         # create scad objects
         self._create_scad_objects()
         # connect scad objects
+        self._connect_scad_objects()
         # generate default views
         return
         # TODO:  NotImplemented
@@ -210,7 +211,11 @@ class AndroidParser:
         for manifest in self.manifests.values():
             manifest.create_objects(parser=self)
 
-    def _create_associaton(
+    def _connect_scad_objects(self) -> None:
+        """Connects the created securiCAD objects"""
+        self.filesystem.connect_scad_objects(parser=self)
+
+    def create_associaton(
         self, s_obj: "Object", t_obj: "Object", s_field: str, t_field: str
     ) -> None:
         """Creates an association between two securicad Objects
@@ -220,6 +225,9 @@ class AndroidParser:
         \t s_field - the s_obj's field name
         \t t_field - thi t_obj's field name
         """
+        if not any([s_obj, t_obj]):
+            log.error(f"Trying to connect one or more None objects")
+            return
         if s_obj == t_obj:
             return
         try:
@@ -262,8 +270,10 @@ class AndroidParser:
             name = python_obj.name.split(".")[-1]
         try:
             scad_obj = self.model.create_object(asset_type=asset_type, name=name)
-            self.obj_id_to_scad_obj[self.object_id] = scad_obj
-            self.object_id += 1
+            self.scad_id_to_scad_obj[scad_obj.id] = scad_obj
+            if python_obj:
+                python_obj.id = scad_obj.id
+            # self.object_id += 1
             return scad_obj
         except InvalidAssetException as e:
             log.warning(e)

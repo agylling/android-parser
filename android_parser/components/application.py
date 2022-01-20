@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element
-from typing import Union, List, TYPE_CHECKING, Dict
+from typing import Union, List, TYPE_CHECKING, Dict, Optional
 from android_parser.components.provider import Provider
 from android_parser.components.activity import Activity
 from android_parser.components.service import Service
@@ -10,7 +10,7 @@ from android_parser.utilities import (
     xml as _xml,
     constants as constants,
 )
-from android_parser.components.android_classes import Base
+from android_parser.components.android_classes import Base, UID
 from android_parser.components.filesystem import (
     FileSystem,
     Directory,
@@ -24,6 +24,7 @@ from android_parser.components.intent_filter import Intent
 if TYPE_CHECKING:
     from android_parser.components.manifest import Manifest
     from android_parser.main import AndroidParser
+    from android_parser.components.intent_filter import IntentFilter
 
 AndroidComponent = Union[Activity, Provider, Service, Receiver]
 
@@ -44,6 +45,9 @@ class Application(Base):
     internal_app_directories: Dict[str, Directory] = field(
         default_factory=dict, init=False
     )
+    _content_resolver: "ContentResolver" = field(default=None, init=False)
+    _process: "UID" = field(default=False, init=False)
+    _process_is_private: bool = field(default=False, repr=False, init=False)
 
     @property
     def name(self) -> str:
@@ -54,11 +58,37 @@ class Application(Base):
         return self._intent
 
     @property
-    def process(self) -> str:
-        return self.attributes.get("process", self.name)
+    def process(self) -> "UID":
+        return self._process
+
+    @property
+    def process_is_private(self) -> bool:
+        return self._process_is_private
+
+    @property
+    def content_resolver(self) -> "ContentResolver":
+        return self._content_resolver
+
+    @property
+    def intent_fitlers(self) -> List["IntentFilter"]:
+        """Returns all the intent filters that are defined within the application"""
+        application_components: List[AndroidComponent] = [
+            *self.providers,
+            *self.services,
+            *self.activities,
+            *self.receivers,
+        ]
+        return [intent_filter for x in application_components for intent_filter in x]
 
     def __post_init__(self):
-        application_components = [
+        if self.attributes.get("process"):
+            object.__setattr__(
+                self,
+                "_process_is_private",
+                True if self.attributes.get("process")[0] == ":" else False,
+            )  # https://developer.android.com/guide/topics/manifest/service-element#proc
+
+        application_components: List[AndroidComponent] = [
             *self.providers,
             *self.services,
             *self.activities,
@@ -68,16 +98,21 @@ class Application(Base):
             if not component:
                 continue
             component.parent = self
+        # TODO: In reality an app will start it's internal unreachable components via intents as well... so remove .intent_filters?
         intent_target_components = [
             x for x in application_components if x.intent_filters
         ]
-        object.__setattr__(self, "_intent", Intent(targets=intent_target_components))
+        object.__setattr__(
+            self, "_intent", Intent(targets=intent_target_components, _parent=[self])
+        )
+        object.__setattr__(self, "_content_resolver", ContentResolver(_parent=self))
+        procces_name = self.attributes.get("process", self.name)
+        object.__setattr__(self, "_process", UID(_parent=self, _name=procces_name))
 
     def create_app_storage(self) -> None:
         """Generates the application directories"""
         filesystem: "FileSystem" = self.parent.file_system
         if not filesystem:
-            scoped_storage = DataType.SCOPED_STORAGE
             log.error(
                 f"No parser connected to parent manifest {self.parent}, cannot access FileSystem"
             )
@@ -147,8 +182,8 @@ class Application(Base):
 
         application_obj = Application(
             attributes=attribs,
-            providers=providers,
             activities=activities,
+            providers=providers,
             services=services,
             receivers=receivers,
         )
@@ -180,11 +215,9 @@ class Application(Base):
             return
         app_scad_obj = parser.create_object(asset_type="App", python_obj=self)
         # UID (Process)
-        parser.create_object(asset_type="UID", name=self.process)
+        parser.create_object(python_obj=self.process)
         # ContentResolver
-        parser.create_object(
-            asset_type="ContentResolver", name=f"ContentResolver-{self.name}"
-        )
+        parser.create_object(python_obj=self.content_resolver)
         # Storage is handled by filesystem.py
         # TODO: Databases
         # Components
@@ -195,3 +228,43 @@ class Application(Base):
             *self.providers,
         ]:
             component.create_scad_objects(parser=parser)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        app = parser.scad_id_to_scad_obj[self.id]
+        # Association AppScopedStorage
+        try:
+            scoped_storage = parser.filesystem.scoped_storage[self.name]
+            parser.create_associaton(
+                s_obj=scoped_storage,
+                t_obj=app,
+                s_field="app",
+                t_field="scopedStorage",
+            )
+        except KeyError:
+            if not self.attributes.get("requestLegacyExternalStorage"):
+                log.warning(
+                    f"Expected a scoped storage object on app {self.name}, but none found"
+                )
+            pass
+        # TODO: Association Process
+        # TODO: Association AppSpecificDirectories
+        # TODO: Association ScopedAppSpecificDirectories
+        # TODO: Association StructuredAppData
+        # TODO: Associaton SharedPreferences
+
+
+@dataclass()
+class ContentResolver(Base):
+    _parent: "Application" = field(init=True)
+
+    @property
+    def parent(self) -> "Application":
+        return self._parent
+
+    @property
+    def asset_type(self) -> str:
+        return "ContentResolver"
+
+    @property
+    def name(self) -> str:
+        return f"{self.parent.name}-ContentResolver"

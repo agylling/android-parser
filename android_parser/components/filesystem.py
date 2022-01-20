@@ -1,11 +1,11 @@
-from typing import TYPE_CHECKING, Union, Optional, Dict
+from typing import TYPE_CHECKING, Union, Optional, Dict, List
 from android_parser.utilities.log import log
 from dataclasses import dataclass, field
 from enum import Enum
 from android_parser.utilities import (
     constants as constants,
 )
-from android_parser.components.android_classes import Base, Data
+from android_parser.components.android_classes import Base
 
 
 if TYPE_CHECKING:
@@ -118,6 +118,61 @@ class FileSystem:
         self.external_storage.create_scad_objects(parser=parser)
         for scoped_storage_obj in self.scoped_storage.values():
             scoped_storage_obj.create_scad_objects(parser=parser)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        """Creates the associations between the created scad objects
+        \n Keyword arguments:
+        \t parser - the AndroidParser instance that created the securiCAD objects
+        """
+
+        def connect_dir_to_root(volume: "Object", sub_dirs: Dict["str", "Directory"]):
+            for sub_dir in sub_dirs.values():
+                sub_dir_scad_obj = parser.scad_id_to_scad_obj[sub_dir.id]
+                # Association PlacedInVolumeRoot
+                parser.create_associaton(
+                    s_obj=volume,
+                    t_obj=sub_dir_scad_obj,
+                    s_field="directories",
+                    t_field="volume",
+                )
+
+        device = parser.device
+        if not device:
+            log.error(f"{__file__}: There's no device object to connect to")
+        else:
+            # Association InternalStorageVolumes
+            int_storage = parser.scad_id_to_scad_obj[self.internal_storage.id]
+            parser.create_associaton(
+                s_obj=device,
+                t_obj=int_storage,
+                s_field="internalStorage",
+                t_field="device",
+            )
+            # Association ExternalStorageVolumes
+            ext_storage = parser.scad_id_to_scad_obj[self.external_storage.id]
+            parser.create_associaton(
+                s_obj=device,
+                t_obj=ext_storage,
+                s_field="externalStorage",
+                t_field="device",
+            )
+            for scoped_storage in self.scoped_storage:
+                for volume in [int_storage, ext_storage]:
+                    # Association ContainedIn
+                    parser.create_associaton(
+                        s_obj=scoped_storage,
+                        t_obj=volume,
+                        s_field="storageVolumes",
+                        t_field="partitions",
+                    )
+            connect_dir_to_root(
+                volume=int_storage, sub_dirs=self.internal_storage.sub_dirs
+            )
+            connect_dir_to_root(
+                volume=ext_storage, sub_dirs=self.external_storage.sub_dirs
+            )
+        self.internal_storage.connect_scad_objects(parser=parser)
+        self.external_storage.connect_scad_objects(parser=parser)
 
 
 def _path(data: Union["Directory", "File"]) -> str:
@@ -234,6 +289,31 @@ class Directory(Base):
         # files
         for file in self.files.values():
             file.create_scad_objects(parser=parser)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        dir_scad_obj = parser.scad_id_to_scad_obj[self.id]
+        for sub_dir in self.sub_dirs.values():
+            # Association SubOfDirectoryOf
+            sub_dir_scad_obj = parser.scad_id_to_scad_obj[sub_dir.id]
+            parser.create_associaton(
+                s_obj=dir_scad_obj,
+                t_obj=sub_dir_scad_obj,
+                s_field="subDirectory",
+                t_field="superDirectory",
+            )
+            # TODO: Can probably make this recursion multithreaded
+            sub_dir.connect_scad_objects(parser=parser)
+        for file in self.files.values():
+            # Association Contains
+            file_scad_obj = parser.scad_id_to_scad_obj[file.id]
+            parser.create_associaton(
+                s_obj=dir_scad_obj,
+                t_obj=file_scad_obj,
+                s_field="files",
+                t_field="directory",
+            )
+            # TODO: Can probably make this recursion multithreaded
+        # TODO: Association PlacedUnderStorageType
 
 
 @dataclass()

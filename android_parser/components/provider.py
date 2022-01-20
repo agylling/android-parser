@@ -39,7 +39,7 @@ class Provider(BaseComponent):
         return self.attributes.get("readPermission")
 
     @property
-    def scad_asset_type(self) -> str:
+    def asset_type(self) -> str:
         """The objects corresponding androidLang scad asset type"""
         return "ContentProvider"
 
@@ -74,8 +74,8 @@ class Provider(BaseComponent):
             attributes=attribs,
             meta_datas=meta_datas,
             intent_filters=intent_filters,
-            path_permissions=path_permissions,
             grant_uri_permissions=greant_uri_permissions,
+            path_permissions=path_permissions,
         )
 
     def print_intents(self, intent_type: "IntentType") -> List[str]:
@@ -94,6 +94,9 @@ class Provider(BaseComponent):
             return
         for path_perm in self.path_permissions:
             path_perm.create_scad_objects(parser=parser)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
 
 
 @dataclass(eq=True)

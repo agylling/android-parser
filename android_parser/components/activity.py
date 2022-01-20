@@ -27,7 +27,7 @@ class Activity(BaseComponent):
         return [x for x in self.attributes.get("foregroundServiceType").split("|") if x]
 
     @property
-    def scad_asset_type(self) -> str:
+    def asset_type(self) -> str:
         """The objects corresponding androidLang scad asset type"""
         return "Activity"
 
@@ -71,7 +71,10 @@ class Activity(BaseComponent):
                 f"{__file__}: Cannot create an scad object without a valid parser"
             )
             return
-        parser.create_object(asset_type=self.scad_asset_type, python_obj=self)
+        parser.create_object(asset_type=self.asset_type, python_obj=self)
         # foreground_service_types
         for type in self.foreground_service_types:
             parser.create_object(asset_type="ForegroundServiceType", name=type)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
