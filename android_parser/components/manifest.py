@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element
-from typing import List, Tuple, TYPE_CHECKING, Dict, Optional
+from typing import List, Tuple, TYPE_CHECKING, Dict, Union
 from android_parser.utilities.log import log
 from dataclasses import dataclass, field
 from android_parser.utilities import (
@@ -13,7 +13,7 @@ from android_parser.components.android_classes import (
     Permission,
     PermissionGroup,
     UsesPermission,
-    UsesPermissionSDK23,
+    UsesPermission23,
     PermissionTree,
 )
 
@@ -36,18 +36,22 @@ def collect_manifest(manifest: Element, parser: "AndroidParser") -> "Manifest":
 
 @dataclass()
 class Manifest:
-    _parser: "AndroidParser" = field()
-    attributes: dict = field(default_factory=dict)
-    permissions: List[Permission] = field(default_factory=list)
-    scad_permission_objs: Dict[str, "Object"] = field(default_factory=dict, init=False)
-    uses_permissions: List[UsesPermission] = field(default_factory=list)
-    uses_permissions_sdk_23: List[UsesPermission] = field(default_factory=list)
-    permission_groups: List[UsesPermission] = field(default_factory=list)
-    permission_trees: List[PermissionTree] = field(default_factory=list)
-    applications: List["Application"] = field(default_factory=list)
+    _parser: "AndroidParser" = field(default=None)
     _target_sdk_version: int = field(default=None)
     _min_sdk_version: int = field(default=None)
-    _api_scad_objs: Dict[str, "Object"] = field(default_factory=dict, init=False)
+    attributes: dict = field(default_factory=dict)
+    permissions: List["Permission"] = field(default_factory=list)
+    scad_permission_objs: Dict[str, "Object"] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    uses_permissions: List["UsesPermission"] = field(default_factory=list)
+    uses_permissions_sdk_23: List["UsesPermission23"] = field(default_factory=list)
+    permission_groups: Dict[str, "PermissionGroup"] = field(default_factory=dict)
+    permission_trees: Dict[str, "PermissionTree"] = field(default_factory=dict)
+    applications: List["Application"] = field(default_factory=list)
+    _api_scad_objs: Dict[int, "Object"] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _package: str = field(default=None, init=False)
 
     def __post_init__(self):
@@ -56,11 +60,12 @@ class Manifest:
             log.error("Missing package information from the manifest tag")
         else:
             del self.attributes["package"]  # Save some memory
+        obj: Union["Application", "Permission", "PermissionGroup", "PermissionTree"]
         for obj in [
             *self.applications,
             *self.permissions,
-            *self.permission_groups,
-            *self.permission_trees,
+            *self.permission_groups.values(),
+            *self.permission_trees.values(),
         ]:
             obj.parent = self
         for application in self.applications:
@@ -74,16 +79,28 @@ class Manifest:
     def package(self) -> str:
         return self._package
 
+    @package.setter
+    def package(self, package: str) -> None:
+        self._package = package
+
     @property
     def min_sdk_version(self) -> int:
         return self._min_sdk_version
+
+    @min_sdk_version.setter
+    def min_sdk_version(self, version: int) -> None:
+        self._min_sdk_version = version
 
     @property
     def target_sdk_version(self) -> int:
         return self._target_sdk_version
 
+    @target_sdk_version.setter
+    def target_sdk_version(self, version: int) -> None:
+        self._target_sdk_version = version
+
     @property
-    def parser(self) -> None:
+    def parser(self) -> "AndroidParser":
         return self._parser
 
     @parser.setter
@@ -93,6 +110,10 @@ class Manifest:
     @property
     def file_system(self) -> "FileSystem":
         return self.parser.filesystem
+
+    def get_uses_permissions(self) -> List[Union["UsesPermission", "UsesPermission23"]]:
+        """Returns all UsesPermission and UsesPermission23 objects the Manifest holds"""
+        return [*self.uses_permissions, *self.uses_permissions_sdk_23]
 
     def from_xml(manifest: Element, parser: "AndroidParser") -> "Manifest":
         """Creates an Application object out of a application tag \n
@@ -129,8 +150,8 @@ class Manifest:
         permissions = Permission.collect_permissions(tag=manifest)
         permission_groups = PermissionGroup.collect_permission_groups(tag=manifest)
         permission_trees = PermissionTree.collect_permission_trees(tag=manifest)
-        uses_permissions_23 = UsesPermissionSDK23.collect_uses_permissions(tag=manifest)
-        # Uses Features
+        uses_permissions_23 = UsesPermission23.collect_uses_permissions(tag=manifest)
+        # TODO: Uses Features
         manifest.findall("uses-feature")
         # Applications
         applications: List["Application"] = Application.collect_applications(
@@ -148,9 +169,9 @@ class Manifest:
             _target_sdk_version=target_sdk,
             applications=applications,
         )
-        with open("manifest_objects.json", "w") as f:
+        """with open("manifest_objects.json", "w") as f:
             pass
-            # json.dump(manifest_obj.__dict__, fp=f, indent=4, sort_keys=True)
+            # json.dump(manifest_obj.__dict__, fp=f, indent=4, sort_keys=True)"""
 
         return manifest_obj
 
@@ -169,28 +190,89 @@ class Manifest:
             name = f"API_LEVEL_{api_level}"
             api_scad_obj = parser.create_object(asset_type=name, name=name)
             if api_scad_obj:
-                self._api_scad_objs[name] = api_scad_obj
+                self._api_scad_objs[api_level] = api_scad_obj
         # Permissions
         for permission in self.permissions:
             permission.create_scad_objects(parser=parser)
-        for uses_permission in self.uses_permissions:
-            parser.create_object(
-                asset_type="UsesPermission", python_obj=uses_permission
+        uses_permission: Union["UsesPermission", "UsesPermission23"]
+        for uses_permission in self.get_uses_permissions():
+            uses_permission.create_scad_objects(parser=parser)
+            # The UsesPermission connects to the permission with that name
+            Permission.create_scad_android_permission(
+                parser=parser, name=uses_permission.name, manifest_obj=self
             )
-        for uses_permission in self.uses_permissions_sdk_23:
-            parser.create_object(
-                asset_type="UsesPermission", python_obj=uses_permission
-            )
-        # Permission Groups
-        for permission_group in self.permission_groups:
-            parser.create_object(
-                asset_type="PermissionGroup", python_obj=permission_group
-            )
-        # Permission Trees
-        for permission_tree in self.permission_trees:
-            parser.create_object(
-                asset_type="PermissionTree", python_obj=permission_tree
-            )
+        # Permission Groups / Permission Trees
+        permission_container: Union["PermissionGroup", "PermissionTree"]
+        for permission_container in [*self.permission_groups, *self.permission_trees]:
+            permission_container.create_scad_objects(parser=parser)
+
         # TODO: Uses Feature
         for application in self.applications:
             application.create_scad_objects(parser=parser)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        """Creates the associations between the created scad objects
+        \n Keyword arguments:
+        \t parser - the AndroidParser instance that created the securiCAD objects
+        """
+        # Association UsesPermission
+        for uses_perm in self.get_uses_permissions():
+            uses_perm_scad_obj = parser.scad_id_to_scad_obj[uses_perm.id]
+            for app in self.applications:
+                app_scad_obj = parser.scad_id_to_scad_obj[app.id]
+                parser.create_associaton(
+                    s_obj=uses_perm_scad_obj,
+                    t_obj=app_scad_obj,
+                    s_field="app",
+                    t_field="usesPermissions",
+                )
+            # Association PermissionName
+            permission_scad_obj = self.scad_permission_objs[uses_perm.name]
+            parser.create_associaton(
+                s_obj=uses_perm_scad_obj,
+                t_obj=permission_scad_obj,
+                s_field="permission",
+                t_field="usesPermission",
+            )
+            if uses_perm.max_sdk_version:
+                api_scad_obj = self._api_scad_objs[uses_perm.max_sdk_version]
+                # Association MaxSDKVersion
+                parser.create_associaton(
+                    s_obj=uses_perm_scad_obj,
+                    t_obj=api_scad_obj,
+                    s_field="apiLevels",
+                    t_field="usesPermissions",
+                )
+        # Association PermissionContainers
+        for permission_container in [
+            *self.permission_groups.values(),
+            *self.permission_trees.values(),
+        ]:
+            container_scad_obj = parser.scad_id_to_scad_obj[permission_container.id]
+            for app in self.applications:
+                application_scad_obj = parser.scad_id_to_scad_obj[app.id]
+                parser.create_associaton(
+                    s_obj=container_scad_obj,
+                    t_obj=application_scad_obj,
+                    s_field="apps",
+                    t_field="permissionContainers",
+                )
+        # Association ContainedIn
+        for permission in self.permissions:
+            if permission.permission_group:
+                pass
+        for permission_tree in self.permission_trees.values():
+            domain = permission_tree.name
+            permissions = [
+                scad_obj
+                for (x, scad_obj) in self.scad_permission_objs.items()
+                if domain in x.name
+            ]
+            permission_tree_scad_obj = parser.scad_id_to_scad_obj[permission_tree.id]
+            for permission in permissions:
+                parser.create_associaton(
+                    s_obj=permission_tree_scad_obj,
+                    t_obj=permission,
+                    s_field="permissions",
+                    t_field="permissionContainer",
+                )

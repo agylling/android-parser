@@ -35,18 +35,16 @@ class Base:
         self._id = id
 
     @property
-    def parent(self) -> Optional["Any"]:
+    def parent(self) -> Optional[Any]:
         return self._parent
 
     @parent.setter
     def parent(self, parent: Any) -> None:
         self._parent = parent
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
-        """Creates the associations between the created scad objects
-        \n Keyword arguments:
-        \t parser - the AndroidParser instance that created the securiCAD objects
-        """
+    @property
+    def asset_type(self) -> str:
+        """Returns the correpsonding androidLang securiCAD object of the class"""
         ...
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
@@ -54,7 +52,20 @@ class Base:
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
-        ...
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        """Creates the associations between the created scad objects
+        \n Keyword arguments:
+        \t parser - the AndroidParser instance that created the securiCAD objects
+        """
+        if not parser:
+            log.error(f"{__file__}: Cannot connect scad objects without a valid parser")
+            return
 
 
 class IntentType(Enum):
@@ -88,6 +99,10 @@ class PermissionGroup(Base):
         return self.attributes.get("name")
 
     @property
+    def asset_type(self) -> str:
+        return "PermissionGroup"
+
+    @property
     def description(self) -> str:
         """The name for a logical grouping of related permissions that permission objects join to"""
         return self.attributes.get("description")
@@ -102,19 +117,21 @@ class PermissionGroup(Base):
         attribs = _xml.get_attributes(tag=permission_group)
         return PermissionGroup(attributes=attribs)
 
-    def collect_permission_groups(tag: Element) -> List["PermissionGroup"]:
+    def collect_permission_groups(tag: Element) -> Dict[str, "PermissionGroup"]:
         """Collects all permission-group tags below the provided xml tag.
         \n Keyword arguments:
         \t tag - a manifest xml tag
         \n Returns:
         \t A list of PermissionGroup objects
         """
-        permission_groups = []
+        permission_groups = {}
         for permission_grp in tag.findall("permission-group"):
-            permission_groups.append(
-                PermissionGroup.from_xml(permission_group=permission_grp)
-            )
+            permission_grp = PermissionGroup.from_xml(permission_group=permission_grp)
+            permission_groups[permission_grp.name] = permission_grp
         return permission_groups
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        parser.create_object(python_obj=self)
 
 
 @dataclass(eq=True)
@@ -126,6 +143,10 @@ class PermissionTree(Base):
     def name(self) -> int:
         return self.attributes.get("name")
 
+    @property
+    def asset_type(self) -> str:
+        return "PermissionTree"
+
     def from_xml(permission_tree: Element) -> "PermissionTree":
         """Creates an PermissionTree object out of a permission-tree tag \n
         Keyword arguments:
@@ -136,24 +157,27 @@ class PermissionTree(Base):
         attribs = _xml.get_attributes(tag=permission_tree)
         return PermissionTree(attributes=attribs)
 
-    def collect_permission_trees(tag: Element) -> List["PermissionTree"]:
+    def collect_permission_trees(tag: Element) -> Dict[str, "PermissionTree"]:
         """Collects all permission-tree tags below the provided xml tag.
         \n Keyword arguments:
         \t tag - a manifest xml tag
         \n Returns:
         \t A list of PermissionTree objects
         """
-        permission_trees = []
+        permission_trees = {}
         for permission_tree in tag.findall("permission-tree"):
-            permission_trees.append(
-                PermissionTree.from_xml(permission_tree=permission_tree)
-            )
+            permission_tree = PermissionTree.from_xml(permission_tree=permission_tree)
+            permission_trees[permission_tree.name] = permission_tree
         return permission_trees
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        parser.create_object(python_obj=self)
 
 
 @dataclass(eq=True)
 class Permission(Base):
     attributes: dict = field(default_factory=dict)
+    _asset_type: str = field(default="Permission", init=False)
 
     @property
     def name(self) -> str:
@@ -169,7 +193,11 @@ class Permission(Base):
 
     @property
     def asset_type(self) -> str:
-        return Permission._trim_android_permission(self.name)
+        return self._asset_type
+
+    @asset_type.setter
+    def asset_type(self, asset_type: str) -> None:
+        self._asset_type = asset_type
 
     def from_xml(permission: Element) -> "Permission":
         """Creates an Permission object out of a permission tag \n
@@ -218,10 +246,9 @@ class Permission(Base):
                 f"{__file__}: Cannot create an scad object without a valid parser"
             )
             return
-        asset_type = Permission._permission_in_lang(
-            parser=parser, asset_type=self.asset_type
-        )
-        parser.create_object(asset_type=asset_type, python_obj=self)
+        base = Permission._trim_android_permission(self.name)
+        self.asset_type = Permission._permission_in_lang(parser=parser, asset_type=base)
+        parser.create_object(python_obj=self)
 
     def _trim_android_permission(name) -> str:
         if "android.permission." in name:
@@ -278,14 +305,16 @@ class UsesPermission(Base):
     attributes: dict = field(default_factory=dict)
 
     @property
-    def max_sdk_version(self) -> int:
+    def max_sdk_version(self) -> Optional[int]:
         return self.attributes.get("maxSdkVersion")
 
     @property
     def name(self) -> int:
-        if "android.permission." in self.attributes.get("name"):
-            return self.attributes.get("name").replace("android.permission.", "")
         return self.attributes.get("name")
+
+    @property
+    def asset_type(self) -> str:
+        return "UsesPermission"
 
     def from_xml(uses_permission: Element) -> "UsesPermission":
         """Creates an UsesPermission object out of a uses-permission tag \n
@@ -311,32 +340,39 @@ class UsesPermission(Base):
             )
         return uses_permissions
 
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        parser.create_object(python_obj=self)
 
-@dataclass
-class UsesPermissionSDK23(UsesPermission):
+
+@dataclass(eq=True)
+class UsesPermission23(UsesPermission):
     # https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element
 
+    @property
+    def asset_type(self) -> str:
+        return "UsesPermissionSdk23"
+
     def from_xml(uses_permission_sdk_23: Element) -> "UsesPermission":
-        """Creates an UsesPermissionSDK23 object out of a uses-permission-sdk-23 tag \n
+        """Creates an UsesPermission23 object out of a uses-permission-sdk-23 tag \n
         Keyword arguments:
         \t uses-permission: An uses-permission-sdk-23 Element object
         Returns:
-        \t UsesPermissionSDK23 object
+        \t UsesPermission23 object
         """
         attribs = _xml.get_attributes(tag=uses_permission_sdk_23)
-        return UsesPermissionSDK23(attributes=attribs)
+        return UsesPermission23(attributes=attribs)
 
     def collect_uses_permissions(tag: Element) -> List["UsesPermission"]:
         """Collects all uses-permission-sdk-23 tags below the provided xml tag.
         \n Keyword arguments:
         \t tag - a manifest xml tag
         \n Returns:
-        \t A list of UsesPermissionSDK23 objects
+        \t A list of UsesPermission23 objects
         """
         uses_permissions = []
-        for uses_permission in tag.findall("uses-permission"):
+        for uses_permission in tag.findall("uses-permission-sdk-23"):
             uses_permissions.append(
-                UsesPermissionSDK23.from_xml(uses_permission_sdk_23=uses_permission)
+                UsesPermission23.from_xml(uses_permission_sdk_23=uses_permission)
             )
         return uses_permissions
 
@@ -368,7 +404,7 @@ class BaseComponent(Base):
             component.parent = self
 
     @property
-    def permission(self) -> str:
+    def permission(self) -> Optional[str]:
         return self.attributes.get("permission")
 
     @property
@@ -432,6 +468,7 @@ class BaseComponent(Base):
             parser.create_object(python_obj=self.process)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        component = parser.scad_id_to_scad_obj[self.id]
         # Association Process
         if self.attributes.get("process"):
             process_scad_obj = parser.scad_id_to_scad_obj[self.process.id]
@@ -443,3 +480,12 @@ class BaseComponent(Base):
                 t_field="uid",
             )
         manifest_parent = self.manifest_parent
+        # Association AndroidPermission
+        if self.permission:
+            permission = self.manifest_parent.scad_permission_objs[self.permission]
+            parser.create_associaton(
+                s_obj=component,
+                t_obj=permission,
+                s_field="androidPermission",
+                t_field="component",
+            )

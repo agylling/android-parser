@@ -1,4 +1,5 @@
 from __future__ import annotations
+from aifc import Error
 from mimetypes import init
 import sys
 import typer
@@ -59,6 +60,11 @@ if TYPE_CHECKING:
         PermissionGroup,
         Permission,
     ]
+
+
+class MissingAttributes(Exception):
+    pass
+
 
 # import tqdm  # alternative progressbar
 @dataclass()
@@ -260,10 +266,9 @@ class AndroidParser:
             )
             return
         if not any([hasattr(python_obj, "asset_type"), asset_type]):
-            log.error(
-                f"{__file__}: To create an scad object, the provided python_obj must have an asset_type property or asset_type needs to be explicitly provided AndroidParser().create_object(...)"
+            raise MissingAttributes(
+                "To create an scad object, the provided python_obj must have an asset_type property."
             )
-            return
         if hasattr(python_obj, "asset_type") and not asset_type:
             asset_type = python_obj.asset_type
         if hasattr(python_obj, "name"):

@@ -62,6 +62,10 @@ class Application(Base):
         return self._process
 
     @property
+    def permission(self) -> Optional[str]:
+        return self.attributes.get("permission")
+
+    @property
     def process_is_private(self) -> bool:
         return self._process_is_private
 
@@ -70,15 +74,26 @@ class Application(Base):
         return self._content_resolver
 
     @property
-    def intent_fitlers(self) -> List["IntentFilter"]:
-        """Returns all the intent filters that are defined within the application"""
-        application_components: List[AndroidComponent] = [
+    def parent(self) -> "Manifest":
+        return self._parent
+
+    @parent.setter
+    def parent(self, parent: "Manifest") -> None:
+        self._parent = parent
+
+    @property
+    def components(self) -> List[AndroidComponent]:
+        return [
             *self.providers,
             *self.services,
             *self.activities,
             *self.receivers,
         ]
-        return [intent_filter for x in application_components for intent_filter in x]
+
+    @property
+    def intent_fitlers(self) -> List["IntentFilter"]:
+        """Returns all the intent filters that are defined within the application"""
+        return [intent_filter for x in self.components for intent_filter in x]
 
     def __post_init__(self):
         if self.attributes.get("process"):
@@ -88,20 +103,12 @@ class Application(Base):
                 True if self.attributes.get("process")[0] == ":" else False,
             )  # https://developer.android.com/guide/topics/manifest/service-element#proc
 
-        application_components: List[AndroidComponent] = [
-            *self.providers,
-            *self.services,
-            *self.activities,
-            *self.receivers,
-        ]
-        for component in application_components:
+        for component in self.components:
             if not component:
                 continue
             component.parent = self
         # TODO: In reality an app will start it's internal unreachable components via intents as well... so remove .intent_filters?
-        intent_target_components = [
-            x for x in application_components if x.intent_filters
-        ]
+        intent_target_components = [x for x in self.components if x.intent_filters]
         object.__setattr__(
             self, "_intent", Intent(targets=intent_target_components, _parent=[self])
         )
@@ -221,12 +228,7 @@ class Application(Base):
         # Storage is handled by filesystem.py
         # TODO: Databases
         # Components
-        for component in [
-            *self.activities,
-            *self.services,
-            *self.receivers,
-            *self.providers,
-        ]:
+        for component in self.components:
             component.create_scad_objects(parser=parser)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
@@ -246,6 +248,26 @@ class Application(Base):
                     f"Expected a scoped storage object on app {self.name}, but none found"
                 )
             pass
+        manifest = self.parent
+        # Association AndroidPermission
+        if self.permission:
+            permission = manifest.scad_permission_objs[self.permission]
+            parser.create_associaton(
+                s_obj=app,
+                t_obj=permission,
+                s_field="androidPermission",
+                t_field="onApp",
+            )
+        # Association onApp
+        for component in self.components:
+            parser.create_associaton(
+                s_obj=app,
+                t_obj=component,
+                s_field="components",
+                t_field="app",
+            )
+
+        # TODO: USES-PERM
         # TODO: Association Process
         # TODO: Association AppSpecificDirectories
         # TODO: Association ScopedAppSpecificDirectories
