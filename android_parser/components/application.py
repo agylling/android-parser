@@ -196,30 +196,26 @@ class Application(Base):
         )
         return application_obj
 
-    def collect_applications(tag: Element) -> List["Application"]:
-        """Collects all application tags below the provided xml tag.
+    def collect_applications(tag: Element) -> "Application":
+        """Collects the application tag below the provided manifest tag.
         \n Keyword arguments:
         \t tag - a manifest xml tag
         \n Returns:
-        \t A list of Application objects
+        \t An Application object
         """
-        applications = []
-        for app_tag in tag.findall("application"):
-            applications.append(
-                Application.from_xml(application=app_tag, parent_type=tag.tag)
-            )
-        return applications
+
+        # An application tag can only occur once under a manifest
+        application = tag.find("application")
+        if application:
+            return Application.from_xml(application=application, parent_type=tag.tag)
+        raise _xml.ComponentNotFound("There is no application tag in the manifest")
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         """creates an Application androidLang securiCAD object
         \nKeyword arguments:
         \t parser - an AndroidParser instance
         """
-        if not parser:
-            log.error(
-                f"{__file__}: Cannot create an scad object without a valid parser"
-            )
-            return
+        super().create_scad_objects(parser)
         app_scad_obj = parser.create_object(asset_type="App", python_obj=self)
         # UID (Process)
         parser.create_object(python_obj=self.process)
@@ -232,6 +228,7 @@ class Application(Base):
             component.create_scad_objects(parser=parser)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
         app = parser.scad_id_to_scad_obj[self.id]
         # Association AppScopedStorage
         try:
@@ -266,7 +263,14 @@ class Application(Base):
                 s_field="components",
                 t_field="app",
             )
-
+        # Association AppContentResolver
+        resolver = parser.scad_id_to_scad_obj[self.content_resolver]
+        parser.create_associaton(
+            s_obj=app,
+            t_obj=resolver,
+            s_field="resolver",
+            t_field="app",
+        )
         # TODO: USES-PERM
         # TODO: Association Process
         # TODO: Association AppSpecificDirectories

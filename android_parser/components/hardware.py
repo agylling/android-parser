@@ -49,6 +49,7 @@ class Device(Base):
         \nKeyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
         components: List[Union["Microphone", "GPS", "CameraModule", "SystemApp"]] = [
             self.camera_module,
@@ -65,6 +66,33 @@ class Device(Base):
         for system_app in system_apps:
             self.system_apps[system_app] = SystemApp(_name=system_app)
 
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        device = parser.scad_id_to_scad_obj[self.id]
+        components: List[Union["Microphone", "GPS", "CameraModule", "SystemApp"]] = [
+            self.camera_module,
+            self.gps,
+            self.microphone,
+        ]
+        # Association SystemFeature
+        for component in components:
+            component_obj = parser.scad_id_to_scad_obj[component.id]
+            parser.create_associaton(
+                s_obj=device,
+                t_obj=component_obj,
+                s_field="systemFeatures",
+                t_field="device",
+            )
+        # Assoication RunsApplications
+        for system_app in self.system_apps.values():
+            system_app_obj = parser.scad_id_to_scad_obj[system_app.id]
+            parser.create_associaton(
+                s_obj=device,
+                t_obj=system_app_obj,
+                s_field="apps",
+                t_field="device",
+            )
+
 
 @dataclass()
 class CameraModule(Base):
@@ -77,6 +105,7 @@ class CameraModule(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -91,6 +120,7 @@ class GPS(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -105,6 +135,7 @@ class Microphone(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -125,4 +156,5 @@ class SystemApp(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)

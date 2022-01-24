@@ -19,6 +19,10 @@ if TYPE_CHECKING:
     from android_parser.components.intent_filter import IntentFilter, Intent
 
 
+class MissingAndroidParser(Exception):
+    pass
+
+
 @dataclass()
 class Base:
     _id: Optional[int] = field(default=None, init=False)
@@ -53,10 +57,9 @@ class Base:
         \t parser - an AndroidParser instance
         """
         if not parser:
-            log.error(
-                f"{__file__}: Cannot create an scad object without a valid parser"
-            )
-            return
+            log.error(f"Cannot create an scad object without a valid parser")
+            raise MissingAndroidParser
+        # Don't want to add parser.create_object(python_obj=self) because some classes overrides the asset_type
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         """Creates the associations between the created scad objects
@@ -64,8 +67,8 @@ class Base:
         \t parser - the AndroidParser instance that created the securiCAD objects
         """
         if not parser:
-            log.error(f"{__file__}: Cannot connect scad objects without a valid parser")
-            return
+            log.error(f"Cannot connect scad objects without a valid parser")
+            raise MissingAndroidParser
 
 
 class IntentType(Enum):
@@ -131,6 +134,7 @@ class PermissionGroup(Base):
         return permission_groups
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -171,6 +175,7 @@ class PermissionTree(Base):
         return permission_trees
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -241,11 +246,7 @@ class Permission(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
-        if not parser:
-            log.error(
-                f"{__file__}: Cannot create an scad object without a valid parser"
-            )
-            return
+        super().create_scad_objects(parser)
         base = Permission._trim_android_permission(self.name)
         self.asset_type = Permission._permission_in_lang(parser=parser, asset_type=base)
         parser.create_object(python_obj=self)
@@ -267,10 +268,8 @@ class Permission(Base):
         \t An scad Permission object or None
         """
         if not parser:
-            log.error(
-                f"{__file__}: Cannot create an scad object without a valid parser"
-            )
-            return None
+            log.error(f"Cannot create an scad object without a valid parser")
+            raise MissingAndroidParser
         existing_permission_names = set(manifest_obj.scad_permission_objs.keys())
         if name in existing_permission_names:
             log.info(f"{name} was already in ignore")
@@ -341,6 +340,7 @@ class UsesPermission(Base):
         return uses_permissions
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -441,6 +441,7 @@ class BaseComponent(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         # Intent_filters
         for intent_filter in self.intent_filters:
             intent_filter.create_scad_objects(parser=parser)
@@ -468,6 +469,7 @@ class BaseComponent(Base):
             parser.create_object(python_obj=self.process)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
         component = parser.scad_id_to_scad_obj[self.id]
         # Association Process
         if self.attributes.get("process"):

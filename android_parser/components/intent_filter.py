@@ -30,9 +30,11 @@ class Intent(Base):
         \nKeyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
         application_obj = self.parent
         intent_scad_obj = parser.scad_id_to_scad_obj[self.id]
         # Association CreateIntent
@@ -107,6 +109,7 @@ class Action(Base):
         return Action(attributes=_xml.get_attributes(tag=action))
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -137,6 +140,7 @@ class Category(Base):
         return Category(attributes=_xml.get_attributes(tag=category))
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -361,12 +365,7 @@ class IntentFilter(Base):
         return list(partial_intent_strings)
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
-        if not parser:
-            log.error(
-                f"{__file__}: Cannot create an scad object without a valid parser"
-            )
-            return
-
+        super().create_scad_objects(parser)
         # TODO: Can probably create globally unique URIs
         parser.create_object(asset_type="IntentFilter", python_obj=self)
         for category in self.categories:
@@ -379,11 +378,12 @@ class IntentFilter(Base):
         # TODO priority
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
-        intent_scad_obj = parser.scad_id_to_scad_obj[self.id]
+        super().connect_scad_objects(parser)
+        intent_filter_scad_obj = parser.scad_id_to_scad_obj[self.id]
         component_obj = parser.scad_id_to_scad_obj[self.parent.id]
         # Association IntentFilter
         parser.create_associaton(
-            s_obj=intent_scad_obj,
+            s_obj=intent_filter_scad_obj,
             t_obj=component_obj,
             s_field="component",
             t_field="intentFilters",
@@ -392,7 +392,7 @@ class IntentFilter(Base):
             action_scad_obj = parser.scad_id_to_scad_obj[action.id]
             # Association IntentAction
             parser.create_associaton(
-                s_obj=intent_scad_obj,
+                s_obj=intent_filter_scad_obj,
                 t_obj=action_scad_obj,
                 s_field="actions",
                 t_field="intentFilters",
@@ -401,7 +401,7 @@ class IntentFilter(Base):
             cat_scad_obj = parser.scad_id_to_scad_obj[category.id]
             # Association IntentCategory
             parser.create_associaton(
-                s_obj=intent_scad_obj,
+                s_obj=intent_filter_scad_obj,
                 t_obj=cat_scad_obj,
                 s_field="categories",
                 t_field="intentFilters",
@@ -410,7 +410,7 @@ class IntentFilter(Base):
             uri_scad_obj = parser.scad_id_to_scad_obj[uri.id]
             # Association IntentData
             parser.create_associaton(
-                s_obj=intent_scad_obj,
+                s_obj=intent_filter_scad_obj,
                 t_obj=uri_scad_obj,
                 s_field="data",
                 t_field="intentFilters",

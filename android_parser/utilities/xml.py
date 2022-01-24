@@ -2,6 +2,10 @@ from xml.etree.ElementTree import Element, ElementTree
 from typing import Dict, Union
 
 
+class ComponentNotFound(Exception):
+    pass
+
+
 def get_attributes(tag: Element) -> Dict[str, Union[bool, str, float, int]]:
     raw_attribs = tag.attrib
     attribs = {}

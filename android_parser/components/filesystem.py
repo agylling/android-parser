@@ -114,6 +114,11 @@ class FileSystem:
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        if not parser:
+            log.error(
+                f"{__file__}: Cannot create an scad object without a valid parser"
+            )
+            return
         self.internal_storage.create_scad_objects(parser=parser)
         self.external_storage.create_scad_objects(parser=parser)
         for scoped_storage_obj in self.scoped_storage.values():
@@ -124,6 +129,9 @@ class FileSystem:
         \n Keyword arguments:
         \t parser - the AndroidParser instance that created the securiCAD objects
         """
+        if not parser:
+            log.error(f"{__file__}: Cannot connect scad objects without a valid parser")
+            return
 
         def connect_dir_to_root(volume: "Object", sub_dirs: Dict["str", "Directory"]):
             for sub_dir in sub_dirs.values():
@@ -207,6 +215,7 @@ class ScopedStorage(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
@@ -282,6 +291,7 @@ class Directory(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
         # subdirectories
         for sub_dir in self.sub_dirs.values():
@@ -291,6 +301,7 @@ class Directory(Base):
             file.create_scad_objects(parser=parser)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
         dir_scad_obj = parser.scad_id_to_scad_obj[self.id]
         for sub_dir in self.sub_dirs.values():
             # Association SubOfDirectoryOf
@@ -350,4 +361,5 @@ class File(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(asset_type=self.asset_type, python_obj=self)

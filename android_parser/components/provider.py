@@ -94,9 +94,38 @@ class Provider(BaseComponent):
             return
         for path_perm in self.path_permissions:
             path_perm.create_scad_objects(parser=parser)
+        # TODO: GrantURIPermission
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
+        provider_obj = parser.scad_id_to_scad_obj[self.id]
+        # Association externalAppsRequireReadPermissions
+        read_perm_obj = self.manifest_parent.scad_permission_objs[self.read_permission]
+        parser.create_associaton(
+            s_obj=provider_obj,
+            t_obj=read_perm_obj,
+            s_field="readPermission",
+            t_field="readProviders",
+        )
+        # Association externalAppsRequireWritePermissions
+        write_perm_obj = self.manifest_parent.scad_permission_objs[
+            self.write_permission
+        ]
+        parser.create_associaton(
+            s_obj=provider_obj,
+            t_obj=write_perm_obj,
+            s_field="readPermission",
+            t_field="writeProviders",
+        )
+        # Association PathPermissions
+        for path_perm in self.path_permissions:
+            path_perm_obj = parser.scad_id_to_scad_obj[path_perm.id]
+            parser.create_associaton(
+                s_obj=provider_obj,
+                t_obj=path_perm_obj,
+                s_field="pathPermissions",
+                t_field="providers",
+            )
 
 
 @dataclass(eq=True)
@@ -107,6 +136,10 @@ class PathPermission(Base):
     def __post_init__(self) -> None:
         for path in self.create_paths():
             self.paths.append(path)
+
+    @property
+    def permission(self) -> Optional[str]:
+        return self.attributes.get("permission")
 
     @property
     def write_permission(self) -> Optional[str]:
@@ -144,6 +177,7 @@ class PathPermission(Base):
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
+        super().create_scad_objects(parser)
         parser.create_object(asset_type="PathPermission", python_obj=self)
         # paths are handled in connect (searhing for directories, files etc.)
         # write_permission
@@ -163,6 +197,48 @@ class PathPermission(Base):
                 parser=parser, name=self.read_permission, manifest_obj=manifest_obj
             )
         # TODO: URIPermissions
+
+    def connect_scad_objects(
+        self, parser: "AndroidParser", called_by_cp: "Provider"
+    ) -> None:
+        """Creates the associations between the created scad objects
+        \n Keyword arguments:
+        \t parser - the AndroidParser instance that created the securiCAD objects
+        \t called_by_cp - A ContentOrovider that has the PathPermission, so that we can reach the permission objects in the correct Manifest
+        """
+        super().connect_scad_objects(parser)
+        # TODO: Association AllowsAccessToPartition
+        # TODO: Association AllowsAccessToDirectory
+        # TODO: Association AllowsAccessToFile
+        path_perm = parser.scad_id_to_scad_obj[self.id]
+        permissions = called_by_cp.manifest_parent.scad_permission_objs
+        # Association GeneralPathPermission
+        if self.permission:
+            android_perm = permissions[self.permission]
+            parser.create_associaton(
+                s_obj=path_perm,
+                t_obj=android_perm,
+                s_field="permission",
+                t_field="pathPermissions",
+            )
+        # Association PathReadPermission
+        if self.read_permission:
+            read_perm = permissions[self.read_permission]
+            parser.create_associaton(
+                s_obj=path_perm,
+                t_obj=read_perm,
+                s_field="readPermission",
+                t_field="readPathPermissions",
+            )
+        # Association PathWritePermission
+        if self.write_permission:
+            write_perm = permissions[self.read_permission]
+            parser.create_associaton(
+                s_obj=path_perm,
+                t_obj=write_perm,
+                s_field="writePermission",
+                t_field="writePathPermissions",
+            )
 
 
 class GrantURIPermission(Base):

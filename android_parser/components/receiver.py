@@ -1,5 +1,5 @@
 from xml.etree.ElementTree import Element
-from typing import Optional, List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 from android_parser.utilities.log import log
 from dataclasses import dataclass, field
 from android_parser.utilities import (
@@ -9,7 +9,7 @@ from android_parser.components.android_classes import BaseComponent, MetaData
 from android_parser.components.intent_filter import IntentFilter, IntentType
 
 if TYPE_CHECKING:
-    from android_parser.components.application import Application
+    from android_parser.main import AndroidParser
 
 
 @dataclass
@@ -66,11 +66,6 @@ class Receiver(BaseComponent):
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         super().create_scad_objects(parser=parser)
-        if not parser:
-            log.error(
-                f"{__file__}: Cannot create an scad object without a valid parser"
-            )
-            return
         parser.create_object(asset_type=self.asset_type, python_obj=self)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
