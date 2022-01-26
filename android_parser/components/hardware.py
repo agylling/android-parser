@@ -29,6 +29,10 @@ class Device(Base):
         self.__add_system_apps()
 
     @property
+    def name(self) -> str:
+        return "Device"
+
+    @property
     def camera_module(self) -> "CameraModule":
         return self._camera_module
 

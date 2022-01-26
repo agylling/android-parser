@@ -79,6 +79,7 @@ class Service(BaseComponent):
                 _parent=self, foreground_service_types=foreground_service_types
             ),
         )
+        self.attributes.setdefault("isolatedProcess", False)
 
     @property
     def asset_type(self) -> str:
@@ -88,6 +89,10 @@ class Service(BaseComponent):
     @property
     def foreground_service_type(self) -> "ForegroundServiceType":
         return self._foreground_service_type
+
+    @property
+    def isolatedProcess(self) -> bool:
+        return self.attributes.get("isolatedProcess")
 
     def from_xml(service: Element) -> "Service":
         """Creates an Service object out of a xml service tag \n
@@ -149,4 +154,8 @@ class Service(BaseComponent):
             t_obj=foreground_service,
             s_field="foregroundServiceTypes",
             t_field="services",
+        )
+        # Defense isolatedProcess
+        service.defense("isolatedProcess").probability = (
+            1.0 if self.isolatedProcess else 0.0
         )

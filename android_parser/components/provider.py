@@ -1,3 +1,4 @@
+import re
 from xml.etree.ElementTree import Element
 from typing import Optional, List, TYPE_CHECKING
 from android_parser.utilities.log import log
@@ -12,6 +13,7 @@ from android_parser.components.android_classes import Permission, Base
 if TYPE_CHECKING:
     from android_parser.components.application import Application
     from android_parser.main import AndroidParser
+    from securicad.model.object import Object
 
 
 @dataclass()
@@ -29,6 +31,9 @@ class Provider(BaseComponent):
         super().__post_init__()
         for obj in [*self.path_permissions, *self.grant_uri_permissions]:
             obj.parent = self
+        self.attributes.setdefault("grantUriPermissions", False)
+        if self.grant_uri_permissions:
+            self.attributes["grantUriPermissions"] = True
 
     @property
     def write_permission(self) -> Optional[str]:
@@ -37,6 +42,10 @@ class Provider(BaseComponent):
     @property
     def read_permission(self) -> Optional[str]:
         return self.attributes.get("readPermission")
+
+    @property
+    def wontGrantURIPermissions(self) -> bool:
+        return self.attributes.get("wontGrantURIPermissions")
 
     @property
     def asset_type(self) -> str:
@@ -126,6 +135,10 @@ class Provider(BaseComponent):
                 s_field="pathPermissions",
                 t_field="providers",
             )
+        # Defense wontGrantURIPermissions
+        provider_obj.defense("wontGrantURIPermissions").probability = (
+            0.0 if self.wontGrantURIPermissions else 1.0
+        )
 
 
 @dataclass(eq=True)
@@ -134,6 +147,7 @@ class PathPermission(Base):
     paths: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        super().__post_init__()
         for path in self.create_paths():
             self.paths.append(path)
 
@@ -206,11 +220,59 @@ class PathPermission(Base):
         \t parser - the AndroidParser instance that created the securiCAD objects
         \t called_by_cp - A ContentOrovider that has the PathPermission, so that we can reach the permission objects in the correct Manifest
         """
-        super().connect_scad_objects(parser)
-        # TODO: Association AllowsAccessToPartition
-        # TODO: Association AllowsAccessToDirectory
-        # TODO: Association AllowsAccessToFile
+
+        def get_matching_paths(parser: "AndroidParser", path: str) -> List["Object"]:
+            """Returns the closest matching directory or file in the filesystem that matches the path string
+            \n Keyword arguments:
+            \t parser - the AndroidParser instance that created the securiCAD objects
+            \t path - a string that the path permission points to
+            \n Returns:
+            \t A list of securicad model Objects
+            """
+            pattern = path.replace("*", ".*")
+            potential_objects = [
+                x.string for x in parser.filesystem.paths.keys() if re.match(pattern, x)
+            ]
+            if not potential_objects:
+                log.warning(
+                    f"Found no matching directories or files for path {pattern}"
+                )
+                return []
+            if not re.match("\.[a-zA-Z0-9]+", pattern):
+                shortest_match = min(potential_objects, key=len)
+                return [shortest_match]
+            else:
+                # Files, need to return all
+                return potential_objects
+
         path_perm = parser.scad_id_to_scad_obj[self.id]
+
+        super().connect_scad_objects(parser)
+        for path in self.paths:
+            if path == "*":
+                t_objs = [
+                    parser.filesystem.internal_storage,
+                    parser.filesystem.external_storage,
+                ]
+            else:
+                t_objs = get_matching_paths(parser=parser, path=path)
+            for t_obj in t_objs:
+                if t_obj.asset_type in ["InternalStorage", "ExternalStorage"]:
+                    s_field = "partitions"
+                elif t_obj.asset_type in ["Directory", "AppSpecificDirectory"]:
+                    s_field = "directories"
+                else:
+                    s_field = "files"
+                # Association AllowsAccessToPartition
+                # Association AllowsAccessToDirectory
+                # Association AllowsAccessToFile
+                parser.create_associaton(
+                    s_obj=path_perm,
+                    t_obj=t_obj,
+                    s_field=s_field,
+                    t_field="pathPermissions",
+                )
+
         permissions = called_by_cp.manifest_parent.scad_permission_objs
         # Association GeneralPathPermission
         if self.permission:

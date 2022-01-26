@@ -46,7 +46,7 @@ class Application(Base):
         default_factory=dict, init=False
     )
     _content_resolver: "ContentResolver" = field(default=None, init=False)
-    _process: "UID" = field(default=False, init=False)
+    _process: "UID" = field(default=None, init=False)
     _process_is_private: bool = field(default=False, repr=False, init=False)
 
     @property
@@ -95,6 +95,10 @@ class Application(Base):
         """Returns all the intent filters that are defined within the application"""
         return [intent_filter for x in self.components for intent_filter in x]
 
+    @property
+    def allow_task_reparenting(self) -> Optional[bool]:
+        return self.attributes.get("allowTaskReparenting")
+
     def __post_init__(self):
         if self.attributes.get("process"):
             object.__setattr__(
@@ -115,6 +119,13 @@ class Application(Base):
         object.__setattr__(self, "_content_resolver", ContentResolver(_parent=self))
         procces_name = self.attributes.get("process", self.name)
         object.__setattr__(self, "_process", UID(_parent=self, _name=procces_name))
+        # default attributes that goes to components
+        for activity in self.activities:
+            if (
+                self.allow_task_reparenting
+                and not activity.attributes.allow_task_reparenting
+            ):
+                activity.attributes.allow_task_reparenting = self.allow_task_reparenting
 
     def create_app_storage(self) -> None:
         """Generates the application directories"""
@@ -271,12 +282,61 @@ class Application(Base):
             s_field="resolver",
             t_field="app",
         )
-        # TODO: USES-PERM
-        # TODO: Association Process
-        # TODO: Association AppSpecificDirectories
-        # TODO: Association ScopedAppSpecificDirectories
+        # Association Process
+        uid = parser.scad_id_to_scad_obj[self.process]
+        parser.create_associaton(
+            s_obj=app,
+            t_obj=uid,
+            s_field="uid",
+            t_field="app",
+        )
+        # Association AppSpecificDirectories
+        for app_dir in [*self.internal_app_directories, *self.external_app_directories]:
+            app_dir_obj = parser.scad_id_to_scad_obj[app_dir.id]
+            parser.create_associaton(
+                s_obj=app,
+                t_obj=app_dir_obj,
+                s_field="appFolders",
+                t_field="app",
+            )
+        # Defense encrypted
+        for int_dir in self.internal_app_directories.values():
+            dir_obj = parser.scad_id_to_scad_obj[int_dir.id]
+            if manifest.target_sdk_version >= 29:
+                dir_obj.defense("encrypted").probability = 1.0
+            else:
+                dir_obj.defense("encrypted").probability = 0.5
+        for ext_dir in self.external_app_directories.values():
+            dir_obj = parser.scad_id_to_scad_obj[ext_dir.id]
+            dir_obj.defense("encrypted").probability = 0.5
+        # Association AppScopedStorage
+        try:
+            scoped_storage = parser.filesystem.scoped_storage[self.name]
+            parser.create_associaton(
+                s_obj=app,
+                t_obj=scoped_storage,
+                s_field="scopedStorage",
+                t_field="app",
+            )
+            for app_dir in [
+                *self.internal_app_directories,
+                *self.external_app_directories,
+            ]:
+                # Association ScopedAppSpecificDirectories
+                app_dir_obj = parser.scad_id_to_scad_obj[app_dir.id]
+                parser.create_associaton(
+                    s_obj=scoped_storage,
+                    t_obj=app_dir_obj,
+                    s_field="appFolders",
+                    t_field="scopedStorage",
+                )
+        except KeyError:
+            pass
         # TODO: Association StructuredAppData
         # TODO: Associaton SharedPreferences
+        # Defense ScopedStorage
+        if self.name in parser.filesystem.scoped_storage:
+            component.defense("ScopedStorage").probability = 1.0
 
 
 @dataclass()

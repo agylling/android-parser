@@ -156,7 +156,7 @@ class AndroidParser:
         self._parse()
 
         # Validate model
-        # self.model.validate()
+        self.model.validate()
 
         # Save model to file
         if ".json" in output_path.suffix.lower():

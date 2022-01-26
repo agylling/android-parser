@@ -159,6 +159,16 @@ class URI(Base):
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         parser.create_object(python_obj=self)
 
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        uri_obj = parser.scad_id_to_scad_obj[self.id]
+        # Defense hasScheme
+        if "*" in self.name:
+            uri_obj.defense("hasScheme").probability = 0.0
+        # Defense mimeTypeSpecified
+        if "-t" in self.name:
+            uri_obj.defense("mimeTypeSpecified").probability = 1.0
+
 
 @dataclass()
 class Data(Base):
@@ -267,6 +277,8 @@ class IntentFilter(Base):
         Returns:
         \tList of uri strings
         """
+        # TODO: Note that several data tags in the same intent filter will match all possible permutations between the tags. https://developer.android.com/training/app-links/deep-linking
+
         uris = set()
         # <scheme>://<host>:<port>[<path>|<pathPrefix>|<pathPattern>]
         for data_obj in self.data:
@@ -291,11 +303,18 @@ class IntentFilter(Base):
             for port in ports
             for path in paths
         ]:
+            if x[0] == "*":
+                if mime_types:
+                    for mime_type in mime_types:
+                        uris.add(f"{x} -t {mime_type}")
+                else:
+                    uris.add(x)
+                continue
             if mime_types:
                 for mime_type in mime_types:
-                    uris.add(f"{path} -t {mime_type}")
+                    uris.add(f"{x} -t {mime_type}")
             else:
-                uris.add(path)
+                uris.add(x)
         return [URI(_name=uri) for uri in list(uris)]
 
     def from_xml(intent_filter: Element, parent_type: str) -> "IntentFilter":
@@ -415,3 +434,5 @@ class IntentFilter(Base):
                 s_field="data",
                 t_field="intentFilters",
             )
+        for uri in self.uris:
+            uri.connect_scad_objects(parser=parser)

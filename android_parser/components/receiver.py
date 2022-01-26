@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 class Receiver(BaseComponent):
     """Broadcast Receiver"""
 
+    # TODO: Fetch Context Registered BroadCast Receivers (Needs static code analysis tool)
+
+    _context_registered: bool = field(default=False)
     # https://developer.android.com/guide/topics/manifest/receiver-element
 
     def __post_init__(self):
@@ -25,6 +28,14 @@ class Receiver(BaseComponent):
     def asset_type(self) -> str:
         """The objects corresponding androidLang scad asset type"""
         return "BroadcastReceiver"
+
+    @property
+    def context_registered(self) -> bool:
+        return self._context_registered
+
+    @context_registered.setter
+    def context_registered(self, value: bool) -> None:
+        self._context_registered = value
 
     def from_xml(receiver: Element) -> "Receiver":
         """Creates an Receiver object out of a xml receiver tag \n
@@ -70,3 +81,8 @@ class Receiver(BaseComponent):
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
+        receiver = parser.scad_id_to_scad_obj[self.id]
+        # Defense notContextRegistered
+        receiver.defense("notContextRegistered").probability = (
+            0.0 if self.context_registered else 1.0
+        )

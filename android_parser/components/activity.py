@@ -27,6 +27,18 @@ class Activity(BaseComponent):
         return [x for x in self.attributes.get("foregroundServiceType").split("|") if x]
 
     @property
+    def allow_task_reparenting(self) -> Optional[bool]:
+        return self.attributes.get("allowTaskReparenting")
+
+    @allow_task_reparenting.setter
+    def allow_tak_reparenting(self, value: Optional[bool]) -> None:
+        self.attributes["allowTaskReparenting"] = value
+
+    @property
+    def enabled(self) -> bool:
+        return self.attributes.get("enabled")
+
+    @property
     def asset_type(self) -> str:
         """The objects corresponding androidLang scad asset type"""
         return "Activity"
@@ -40,6 +52,12 @@ class Activity(BaseComponent):
         """
         attribs = _xml.get_attributes(activity)
         attribs.setdefault("directBootAware", False)
+        attribs.setdefault("allowEmbedded", False)
+        attribs.setdefault("allowTakReparenting", False)
+        attribs.setdefault("alwaysRetainTaskState", False)
+        attribs.setdefault("clearTaskOnLaunch", False)
+        attribs.setdefault("finishOnTaskLaunch", False)
+        attribs.setdefault("multiprocess", False)
         # TODO default attributes
         meta_datas = []
         for meta_data in activity.findall("meta-data"):

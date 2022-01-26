@@ -28,6 +28,9 @@ class Base:
     _id: Optional[int] = field(default=None, init=False)
     _parent: Any = field(default=None, init=False)
 
+    def __post_init__(self) -> None:
+        pass
+
     @property
     def id(self) -> Optional[int]:
         return self._id
@@ -204,6 +207,10 @@ class Permission(Base):
     def asset_type(self, asset_type: str) -> None:
         self._asset_type = asset_type
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.attributes.setdefault("protectionLevel", "signature")
+
     def from_xml(permission: Element) -> "Permission":
         """Creates an Permission object out of a permission tag \n
         Keyword arguments:
@@ -250,6 +257,14 @@ class Permission(Base):
         base = Permission._trim_android_permission(self.name)
         self.asset_type = Permission._permission_in_lang(parser=parser, asset_type=base)
         parser.create_object(python_obj=self)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        # Defense normal, dangerous, signature, signatureOrSystem
+        permission_obj = parser.scad_id_to_scad_obj[self.id]
+        protection_levels = self.attributes["protectionLevel"].split("|")
+        for protection_level in protection_levels:
+            permission_obj.defense(protection_level).probability = 1.0
 
     def _trim_android_permission(name) -> str:
         if "android.permission." in name:
@@ -397,7 +412,8 @@ class BaseComponent(Base):
             )  # https://developer.android.com/guide/topics/manifest/service-element#proc
             procces_name = self.attributes.get("process")
             object.__setattr__(self, "_process", UID(_parent=self, _name=procces_name))
-
+        self.attributes.setdefault("enabled", True)
+        self.attributes.setdefault("exported", False)
         for component in [*self.intent_filters, *self.meta_datas]:
             if not component:
                 continue
@@ -414,6 +430,14 @@ class BaseComponent(Base):
     @property
     def process(self) -> UID:
         return self._process
+
+    @property
+    def enabled(self) -> bool:
+        return self.attributes.get("enabled")
+
+    @property
+    def exported(self) -> bool:
+        return self.attributes.get("exported")
 
     @property
     def process_is_private(self) -> bool:
@@ -482,7 +506,7 @@ class BaseComponent(Base):
                 t_field="uid",
             )
         manifest_parent = self.manifest_parent
-        # Association AndroidPermission
+        # Association SeperateProcess
         if self.permission:
             permission = self.manifest_parent.scad_permission_objs[self.permission]
             parser.create_associaton(
@@ -491,3 +515,10 @@ class BaseComponent(Base):
                 s_field="androidPermission",
                 t_field="component",
             )
+        # Defense notEnabled
+        component.defense("notEnabled").probability = 0.0 if self.enabled else 1.0
+        # Defense notExported
+        component.defense("notExported").probability = 0.0 if self.exported else 1.0
+        # Defense notUsingIntentExtras
+        # TODO: A static code analysis scanner to determine this probability
+        component.defense("notUsingIntentExtras").probability = 0.5
