@@ -7,10 +7,10 @@ from android_parser.utilities import (
 )
 from android_parser.components.android_classes import Base
 
-
 if TYPE_CHECKING:
     from android_parser.main import AndroidParser
     from securicad.model.object import Object
+    from android_parser.components.hardware import SystemApp
     from android_parser.components.application import Application
 
 
@@ -41,8 +41,9 @@ def collect_filesystem() -> "FileSystem":
 class FileSystem:
     _internal_volume: "VolumeStorage" = field(default=None, init=False)
     _external_volume: "VolumeStorage" = field(default=None, init=False)
-    _internal_storage: "Directory" = field(default=None, init=False)
-    _external_storage: "Directory" = field(default=None, init=False)
+    _internal_storage_dir: "Directory" = field(default=None, init=False)
+    _external_storage_dir: "Directory" = field(default=None, init=False)
+    _media_store: "SharedStorage" = field(default=None, init=False)
     paths: Dict[str, "Object"] = field(default_factory=dict, init=False)
     scoped_storage: Dict[str, "ScopedStorage"] = field(default_factory=dict, init=False)
 
@@ -68,24 +69,28 @@ class FileSystem:
         )
         object.__setattr__(
             self,
-            "_internal_storage",
+            "_internal_storage_dir",
             create_volume(name="", volume=Volume.INTERNAL),
         )
         object.__setattr__(
             self,
-            "_external_storage",
+            "_external_storage_dir",
             create_volume(name="sdcard", volume=Volume.EXTERNAL),
+        )
+        object.__setattr__(
+            self,
+            "_media_store",
+            SharedStorage(_parent=self, _name="Shared Media Storage"),
         )
         self.fill_internal_volume()
         self.fill_external_volume()
-        # TODO: MediaStore
 
     def fill_internal_volume(self):
         """Creates all the top directories of the external"""
         top_dirs = ["data"]
         for top_dir in top_dirs:
-            self.internal_storage.create_sub_dir(name=top_dir)
-        data_dir: "Directory" = self.internal_storage.sub_dirs["data"]
+            self.internal_storage_dir.create_sub_dir(name=top_dir)
+        data_dir: "Directory" = self.internal_storage_dir.sub_dirs["data"]
         data_dirs = ["media", "data"]
         for sub_dir in data_dirs:
             data_dir.create_sub_dir(name=sub_dir)
@@ -103,33 +108,87 @@ class FileSystem:
             "Pictures",
         ]
         for top_dir in top_dirs:
-            self.external_storage.create_sub_dir(name=top_dir)
+            self.external_storage_dir.create_sub_dir(name=top_dir)
         # Android (App files)
-        self.external_storage.sub_dirs["Android"].create_sub_dir("data")
+        self.external_storage_dir.sub_dirs["Android"].create_sub_dir("data")
 
     @property
     def internal_volume(self) -> "VolumeStorage":
         return self._internal_volume
 
     @property
-    def internal_storage(self) -> "Directory":
-        return self._internal_storage
+    def internal_storage_dir(self) -> "Directory":
+        return self._internal_storage_dir
 
     @property
     def external_volume(self) -> "VolumeStorage":
         return self._external_volume
 
     @property
-    def external_storage(self) -> "Directory":
-        return self._external_storage
+    def external_storage_dir(self) -> "Directory":
+        return self._external_storage_dir
 
     @property
     def int_data_dir(self) -> "Directory":
-        return self.internal_storage.sub_dirs["data"].sub_dirs["data"]
+        return self.internal_storage_dir.sub_dirs["data"].sub_dirs["data"]
 
     @property
     def ext_data_dir(self) -> "Directory":
-        return self.external_storage.sub_dirs["Android"].sub_dirs["data"]
+        return self.external_storage_dir.sub_dirs["Android"].sub_dirs["data"]
+
+    @property
+    def media_store(self) -> "SharedStorage":
+        return self._media_store
+
+    def create_app_storage(self, app: Union["Application", "SystemApp"]) -> None:
+        """Generates the application directories
+        \n Keyword arguments:
+        \t app - Either an Application or SystemApp instance
+        """
+        if app.__class__.__name__ == "Application":
+            if hasattr(app, "attributes") and not app.attributes.get(
+                "requestLegacyExternalStorage"
+            ):
+                # App uses scoped storage
+                scoped_storage = ScopedStorage(_name=app.name, _parent=app)
+                self.scoped_storage[app.name] = scoped_storage
+            # External files
+            ext_app_dir: "Directory" = self.ext_data_dir.create_sub_dir(
+                name=app.name, dir_type=DataType.APP_SPECIFIC
+            )
+            app.external_app_directories[ext_app_dir.path] = ext_app_dir
+            ext_cache_dir = ext_app_dir.create_sub_dir(
+                name="cache", dir_type=DataType.APP_SPECIFIC
+            )
+            app.external_app_directories[ext_cache_dir.path] = ext_cache_dir
+            ext_files_dir = ext_app_dir.create_sub_dir(
+                name="files", dir_type=DataType.APP_SPECIFIC
+            )
+            app.external_app_directories[ext_files_dir.path] = ext_files_dir
+            ext_files_files = ext_files_dir.create_file(name="dummy.txt")
+        # Internal files
+        int_app_dir: "Directory" = self.int_data_dir.create_sub_dir(
+            name=app.name, dir_type=DataType.APP_SPECIFIC
+        )
+        app.internal_app_directories[int_app_dir.path] = int_app_dir
+        int_cache_dir = int_app_dir.create_sub_dir(
+            name="cache", dir_type=DataType.APP_SPECIFIC
+        )
+        app.internal_app_directories[int_cache_dir.path] = int_cache_dir
+        int_files_dir = int_app_dir.create_sub_dir(
+            name="files", dir_type=DataType.APP_SPECIFIC
+        )
+        app.internal_app_directories[int_files_dir.path] = int_files_dir
+        int_databases_dir = int_app_dir.create_sub_dir(
+            name="databases", dir_type=DataType.APP_SPECIFIC
+        )
+        app.internal_app_directories[int_databases_dir.path] = int_databases_dir
+        int_shared_prefs_dir = int_app_dir.create_sub_dir(
+            name="shared_prefs", dir_type=DataType.APP_SPECIFIC
+        )
+        app.internal_app_directories[int_shared_prefs_dir.path] = int_shared_prefs_dir
+        int_files_files = int_files_dir.create_file(name="dummy.txt")
+        # TODO: Databases
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         """creates the storage related androidLang securiCAD objects out of the directory structure
@@ -141,12 +200,13 @@ class FileSystem:
                 f"{__file__}: Cannot create an scad object without a valid parser"
             )
             return
-        self.internal_storage.create_scad_objects(parser=parser)
-        self.external_storage.create_scad_objects(parser=parser)
+        self.internal_storage_dir.create_scad_objects(parser=parser)
+        self.external_storage_dir.create_scad_objects(parser=parser)
         for scoped_storage_obj in self.scoped_storage.values():
             scoped_storage_obj.create_scad_objects(parser=parser)
         self.internal_volume.create_scad_objects(parser=parser)
         self.external_volume.create_scad_objects(parser=parser)
+        self.media_store.create_scad_objects(parser=parser)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         """Creates the associations between the created scad objects
@@ -157,56 +217,27 @@ class FileSystem:
             log.error(f"{__file__}: Cannot connect scad objects without a valid parser")
             return
 
-        def connect_dir_to_root(volume: "Object", sub_dirs: Dict["str", "Directory"]):
-            for sub_dir in sub_dirs.values():
-                sub_dir_scad_obj = parser.scad_id_to_scad_obj[sub_dir.id]
-                # Association PlacedInVolumeRoot
-                parser.create_associaton(
-                    s_obj=volume,
-                    t_obj=sub_dir_scad_obj,
-                    s_field="directories",
-                    t_field="volume",
-                )
-
-        device = parser.device
+        device = parser.scad_id_to_scad_obj[parser.device.id]
         if not device:
             log.error(f"{__file__}: There's no device object to connect to")
         else:
-            # Association InternalStorageVolumes
-            int_storage = parser.scad_id_to_scad_obj[self.internal_storage.id]
-            parser.create_associaton(
-                s_obj=device,
-                t_obj=int_storage,
-                s_field="internalStorage",
-                t_field="device",
-            )
-            # Association ExternalStorageVolumes
-            ext_storage = parser.scad_id_to_scad_obj[self.external_storage.id]
-            parser.create_associaton(
-                s_obj=device,
-                t_obj=ext_storage,
-                s_field="externalStorage",
-                t_field="device",
-            )
+            int_storage = parser.scad_id_to_scad_obj[self.internal_storage_dir.id]
+            ext_storage = parser.scad_id_to_scad_obj[self.external_storage_dir.id]
             for scoped_storage in self.scoped_storage:
+                scoped_storage_obj = parser.scad_id_to_scad_obj[scoped_storage.id]
                 for volume in [int_storage, ext_storage]:
                     # Association ContainedIn
                     parser.create_associaton(
-                        s_obj=scoped_storage,
+                        s_obj=scoped_storage_obj,
                         t_obj=volume,
                         s_field="storageVolumes",
                         t_field="partitions",
                     )
-            connect_dir_to_root(
-                volume=int_storage, sub_dirs=self.internal_storage.sub_dirs
-            )
-            connect_dir_to_root(
-                volume=ext_storage, sub_dirs=self.external_storage.sub_dirs
-            )
         self.internal_volume.connect_scad_objects(parser=parser)
         self.external_volume.connect_scad_objects(parser=parser)
-        self.internal_storage.connect_scad_objects(parser=parser)
-        self.external_storage.connect_scad_objects(parser=parser)
+        self.internal_storage_dir.connect_scad_objects(parser=parser)
+        self.external_storage_dir.connect_scad_objects(parser=parser)
+        self.media_store.connect_scad_objects(parser=parser)
 
 
 def _path(data: Union["Directory", "File"]) -> str:
@@ -222,6 +253,42 @@ def _path(data: Union["Directory", "File"]) -> str:
     else:
         components.append("sdcard")
     return "/".join(components[::-1])
+
+
+@dataclass
+class SharedStorage(Base):
+    _name: str = field()
+    _parent: "FileSystem" = field()
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def asset_type(self) -> str:
+        return "SharedStorage"
+
+    @property
+    def parent(self) -> "FileSystem":
+        return self._parent
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
+        parser.create_object(python_obj=self)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        # Association ContainedIn
+        shared_storage = parser.scad_id_to_scad_obj[self.id]
+        volumes = [self.parent.internal_volume, self.parent.external_volume]
+        for volume in volumes:
+            volume_obj = parser.scad_id_to_scad_obj[volume.id]
+            parser.create_associaton(
+                s_obj=shared_storage,
+                t_obj=volume_obj,
+                s_field="storageVolumes",
+                t_field="partitions",
+            )
 
 
 @dataclass()
@@ -275,25 +342,26 @@ class VolumeStorage(Base):
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         file_system = parser.filesystem
-        storage = parser.scad_id_to_scad_obj[self.id]
+        volume = parser.scad_id_to_scad_obj[self.id]
         if self.volume == Volume.INTERNAL:
-            root_directory = file_system.internal_storage
+            root_directory = file_system.internal_storage_dir
             s_field = "internalStorage"
         else:
-            root_directory = file_system.external_storage
+            root_directory = file_system.external_storage_dir
             s_field = "externalStorage"
-        # Association PlacedUnderStorageType
+        root_directory_obj = parser.scad_id_to_scad_obj[root_directory.id]
+        # Association PlacedInVolumeRoot
         parser.create_associaton(
-            s_obj=storage,
-            t_obj=root_directory,
+            s_obj=volume,
+            t_obj=root_directory_obj,
             s_field="directories",
-            t_field="storage",
+            t_field="volume",
         )
         # Association InternalStorageVolumes , Association ExternalStorageVolume
         device = parser.scad_id_to_scad_obj[parser.device.id]
         parser.create_associaton(
             s_obj=device,
-            t_obj=storage,
+            t_obj=volume,
             s_field=s_field,
             t_field="device",
         )

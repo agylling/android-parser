@@ -11,20 +11,13 @@ from android_parser.utilities import (
     constants as constants,
 )
 from android_parser.components.android_classes import Base, UID
-from android_parser.components.filesystem import (
-    FileSystem,
-    Directory,
-    DataType,
-    Volume,
-    FileType,
-    ScopedStorage,
-)
 from android_parser.components.intent_filter import Intent
 
 if TYPE_CHECKING:
     from android_parser.components.manifest import Manifest
     from android_parser.main import AndroidParser
     from android_parser.components.intent_filter import IntentFilter
+    from android_parser.components.filesystem import Directory
 
 AndroidComponent = Union[Activity, Provider, Service, Receiver]
 
@@ -39,10 +32,10 @@ class Application(Base):
     services: List["Service"] = field(default_factory=list)
     receivers: List["Receiver"] = field(default_factory=list)
     _intent_object: "Intent" = field(default=None, init=False)
-    external_app_directories: Dict[str, Directory] = field(
+    external_app_directories: Dict[str, "Directory"] = field(
         default_factory=dict, init=False
     )
-    internal_app_directories: Dict[str, Directory] = field(
+    internal_app_directories: Dict[str, "Directory"] = field(
         default_factory=dict, init=False
     )
     _content_resolver: "ContentResolver" = field(default=None, init=False)
@@ -52,6 +45,10 @@ class Application(Base):
     @property
     def name(self) -> str:
         return self.attributes.get("name")
+
+    @property
+    def asset_type(self) -> str:
+        return "App"
 
     @property
     def intent(self) -> "Intent":
@@ -114,7 +111,7 @@ class Application(Base):
         # TODO: In reality an app will start it's internal unreachable components via intents as well... so remove .intent_filters?
         intent_target_components = [x for x in self.components if x.intent_filters]
         object.__setattr__(
-            self, "_intent", Intent(targets=intent_target_components, _parent=[self])
+            self, "_intent", Intent(targets=intent_target_components, _parent=self)
         )
         object.__setattr__(self, "_content_resolver", ContentResolver(_parent=self))
         procces_name = self.attributes.get("process", self.name)
@@ -126,47 +123,6 @@ class Application(Base):
                 and not activity.attributes.allow_task_reparenting
             ):
                 activity.attributes.allow_task_reparenting = self.allow_task_reparenting
-
-    def create_app_storage(self) -> None:
-        """Generates the application directories"""
-        filesystem: "FileSystem" = self.parent.file_system
-        if not filesystem:
-            log.error(
-                f"No parser connected to parent manifest {self.parent}, cannot access FileSystem"
-            )
-        if not self.attributes.get("requestLegacyExternalStorage"):
-            # App uses scoped storage
-            scoped_storage = ScopedStorage(_name=self.name, _parent=self)
-            filesystem.scoped_storage[self.name] = scoped_storage
-        # External files
-        ext_app_dir: "Directory" = filesystem.ext_data_dir.create_sub_dir(
-            name=self.name, dir_type=DataType.APP_SPECIFIC
-        )
-        ext_cache_dir = ext_app_dir.create_sub_dir(
-            name="cache", dir_type=DataType.APP_SPECIFIC
-        )
-        ext_files_dir = ext_app_dir.create_sub_dir(
-            name="files", dir_type=DataType.APP_SPECIFIC
-        )
-        ext_files_files = ext_files_dir.create_file(name="dummy.txt")
-        # Internal files
-        int_app_dir: "Directory" = filesystem.int_data_dir.create_sub_dir(
-            name=self.name, dir_type=DataType.APP_SPECIFIC
-        )
-        int_cache_dir = int_app_dir.create_sub_dir(
-            name="cache", dir_type=DataType.APP_SPECIFIC
-        )
-        int_files_dir = int_app_dir.create_sub_dir(
-            name="files", dir_type=DataType.APP_SPECIFIC
-        )
-        int_databases_dir = int_app_dir.create_sub_dir(
-            name="databases", dir_type=DataType.APP_SPECIFIC
-        )
-        int_shared_prefs_dir = int_app_dir.create_sub_dir(
-            name="shared_prefs", dir_type=DataType.APP_SPECIFIC
-        )
-        int_files_files = int_files_dir.create_file(name="dummy.txt")
-        # TODO: Databases
 
     def from_xml(application: Element, parent_type: str = None) -> "Application":
         """Creates an Application object out of a application tag \n
@@ -227,35 +183,23 @@ class Application(Base):
         \t parser - an AndroidParser instance
         """
         super().create_scad_objects(parser)
-        app_scad_obj = parser.create_object(asset_type="App", python_obj=self)
+        app_scad_obj = parser.create_object(python_obj=self)
         # UID (Process)
-        parser.create_object(python_obj=self.process)
+        self.process.create_scad_objects(parser=parser)
         # ContentResolver
-        parser.create_object(python_obj=self.content_resolver)
+        self.content_resolver.create_scad_objects(parser=parser)
         # Storage is handled by filesystem.py
         # TODO: Databases
         # Components
         for component in self.components:
             component.create_scad_objects(parser=parser)
+        # Intent
+        self.intent.create_scad_objects(parser=parser)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
+        self.content_resolver.connect_scad_objects(parser=parser)
         app = parser.scad_id_to_scad_obj[self.id]
-        # Association AppScopedStorage
-        try:
-            scoped_storage = parser.filesystem.scoped_storage[self.name]
-            parser.create_associaton(
-                s_obj=scoped_storage,
-                t_obj=app,
-                s_field="app",
-                t_field="scopedStorage",
-            )
-        except KeyError:
-            if not self.attributes.get("requestLegacyExternalStorage"):
-                log.warning(
-                    f"Expected a scoped storage object on app {self.name}, but none found"
-                )
-            pass
         manifest = self.parent
         # Association AndroidPermission
         if self.permission:
@@ -268,30 +212,21 @@ class Application(Base):
             )
         # Association onApp
         for component in self.components:
+            component_obj = parser.scad_id_to_scad_obj[component.id]
             parser.create_associaton(
                 s_obj=app,
-                t_obj=component,
+                t_obj=component_obj,
                 s_field="components",
                 t_field="app",
             )
-        # Association AppContentResolver
-        resolver = parser.scad_id_to_scad_obj[self.content_resolver]
-        parser.create_associaton(
-            s_obj=app,
-            t_obj=resolver,
-            s_field="resolver",
-            t_field="app",
-        )
+            component.connect_scad_objects(parser=parser)
         # Association Process
-        uid = parser.scad_id_to_scad_obj[self.process]
-        parser.create_associaton(
-            s_obj=app,
-            t_obj=uid,
-            s_field="uid",
-            t_field="app",
-        )
+        self.process.connect_scad_objects(parser=parser)
         # Association AppSpecificDirectories
-        for app_dir in [*self.internal_app_directories, *self.external_app_directories]:
+        for app_dir in [
+            *self.internal_app_directories.values(),
+            *self.external_app_directories.values(),
+        ]:
             app_dir_obj = parser.scad_id_to_scad_obj[app_dir.id]
             parser.create_associaton(
                 s_obj=app,
@@ -331,12 +266,17 @@ class Application(Base):
                     t_field="scopedStorage",
                 )
         except KeyError:
-            pass
+            if not self.attributes.get("requestLegacyExternalStorage"):
+                log.warning(
+                    f"Expected a scoped storage object on app {self.name}, but none found"
+                )
         # TODO: Association StructuredAppData
         # TODO: Associaton SharedPreferences
         # Defense ScopedStorage
         if self.name in parser.filesystem.scoped_storage:
             component.defense("ScopedStorage").probability = 1.0
+        # Intent
+        self.intent.connect_scad_objects(parser=parser)
 
 
 @dataclass()
@@ -354,3 +294,19 @@ class ContentResolver(Base):
     @property
     def name(self) -> str:
         return f"{self.parent.name}-ContentResolver"
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
+        parser.create_object(python_obj=self)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        # Association AppContentResolver
+        app = parser.scad_id_to_scad_obj[self.parent._id]
+        resolver = parser.scad_id_to_scad_obj[self.id]
+        parser.create_associaton(
+            s_obj=app,
+            t_obj=resolver,
+            s_field="resolver",
+            t_field="app",
+        )

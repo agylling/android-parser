@@ -20,6 +20,7 @@ from android_parser.components import (
     hardware as hardware,
 )
 from android_parser.utilities.log import log
+from android_parser.utilities import attacker as attacker
 from securicad.model import (
     Model,
     json_serializer,
@@ -32,9 +33,9 @@ from securicad.model.exceptions import (
     DuplicateAssociationException,
 )
 from securicad.langspec import Lang
+from securicad.model.object import Object
 
 if TYPE_CHECKING:
-    from securicad.model.object import Object
     from android_parser.components.application import Application
     from android_parser.components.filesystem import FileSystem
     from android_parser.components.hardware import Device
@@ -73,6 +74,16 @@ class AndroidParser:
     manifests: Dict[str, "Manifest"] = field(default_factory=dict, init=False)
     filesystem: "FileSystem" = field(default=None, init=False)
     device: "Device" = field(default=None, init=False)
+    _attacker: "Object" = field(default=None, init=False)
+
+    @property
+    def attacker(self) -> "Object":
+        return self._attacker
+
+    @attacker.setter
+    def attacker(self, attacker: "Object") -> None:
+        self._attacker = attacker
+
     # Key = package name
     # api_levels: Dict[str:Object] = field(default_factory=dict, init=False)
     # applications: Dict[Union[int, str], Object] = field(
@@ -167,7 +178,7 @@ class AndroidParser:
                 json.dump(json_model, f, indent=4, sort_keys=True)
         else:
             output_path = output_path.with_suffix(".sCAD")  # making sure correct suffix
-            scad_serializer.serialize_model(self.model, output_path)
+            # scad_serializer.serialize_model(self.model, output_path)
 
         if not output_path:
             sys.exit(1)
@@ -204,7 +215,10 @@ class AndroidParser:
     def collect(self, input: BinaryIO) -> None:
         """Collects information of an AndroidManifest file wrapped in a Manifest object"""
         self.filesystem = filesystem.collect_filesystem()
+        # DEPENDENCY: Filesystem needs to be created before hardware
         self.device = hardware.Device()
+        for sys_app in self.device.system_apps.values():
+            self.filesystem.create_app_storage(app=sys_app)
         xml_data = ET.parse(input)
         root = xml_data.getroot()
         manifest_obj = manifest.collect_manifest(root, self)
@@ -216,10 +230,15 @@ class AndroidParser:
         self.device.create_scad_objects(parser=self)
         for manifest in self.manifests.values():
             manifest.create_objects(parser=self)
+        attacker.create_attacker(parser=self)
 
     def _connect_scad_objects(self) -> None:
         """Connects the created securiCAD objects"""
         self.filesystem.connect_scad_objects(parser=self)
+        self.device.connect_scad_objects(parser=self)
+        for manifest in self.manifests.values():
+            manifest.connect_scad_objects(parser=self)
+        attacker.connect_attacker(parser=self)
 
     def create_associaton(
         self, s_obj: "Object", t_obj: "Object", s_field: str, t_field: str
@@ -236,14 +255,16 @@ class AndroidParser:
             return
         if s_obj == t_obj:
             return
+        if not all(isinstance(x, Object) for x in [s_obj, t_obj]):
+            log.error(
+                f"One or more invalid object types. got {type(s_obj)}, {type(t_obj)}, expected <Object>, <Object>"
+            )
         try:
             s_obj.field(s_field).connect(t_obj.field(t_field))
         except DuplicateAssociationException:
             pass
         except InvalidAssetException as e:
             log.error(e)
-        finally:
-            return
 
     def create_object(
         self,

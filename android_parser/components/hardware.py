@@ -4,12 +4,14 @@ from dataclasses import dataclass, field
 from android_parser.utilities import (
     constants as constants,
 )
-from android_parser.components.android_classes import Base
-
+from android_parser.components.android_classes import Base, UID
+from android_parser.components.application import ContentResolver
+from android_parser.components.manifest import APILevel
+from android_parser.utilities.constants import MAX_SDK_VERSION
 
 if TYPE_CHECKING:
     from android_parser.main import AndroidParser
-    from securicad.model.object import Object
+    from android_parser.components.filesystem import Directory
 
 
 @dataclass
@@ -96,6 +98,7 @@ class Device(Base):
                 s_field="apps",
                 t_field="device",
             )
+            system_app.connect_scad_objects(parser=parser)
 
 
 @dataclass()
@@ -146,6 +149,19 @@ class Microphone(Base):
 @dataclass()
 class SystemApp(Base):
     _name: str = field()
+    _content_resolver: "ContentResolver" = field(default=None, init=False)
+    _uid: "UID" = field(default=None, init=False)
+    internal_app_directories: Dict[str, "Directory"] = field(
+        default_factory=dict, init=False
+    )
+    _android_api_level: "APILevel" = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        object.__setattr__(self, "_content_resolver", ContentResolver(_parent=self))
+        object.__setattr__(self, "_uid", UID(_parent=self, _name=self.name))
+        object.__setattr__(self, "_android_api_level", APILevel(MAX_SDK_VERSION))
+        self._android_api_level.parent = self
 
     @property
     def name(self) -> str:
@@ -155,6 +171,14 @@ class SystemApp(Base):
     def asset_type(self) -> str:
         return self.name
 
+    @property
+    def process(self) -> UID:
+        return self._uid
+
+    @property
+    def content_resolver(self) -> "ContentResolver":
+        return self._content_resolver
+
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         """creates a specific SystemApp androidLang securiCAD object
         \n Keyword arguments:
@@ -162,3 +186,38 @@ class SystemApp(Base):
         """
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
+        self.content_resolver.create_scad_objects(parser=parser)
+        self.process.create_scad_objects(parser=parser)
+        self._android_api_level.create_scad_objects(parser=parser)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        self.content_resolver.connect_scad_objects(parser=parser)
+        self.process.connect_scad_objects(parser=parser)
+        sys_app = parser.scad_id_to_scad_obj[self.id]
+        # Association AppSpecificDirectories
+        for app_dir in self.internal_app_directories.values():
+            app_dir_obj = parser.scad_id_to_scad_obj[app_dir.id]
+            parser.create_associaton(
+                s_obj=sys_app,
+                t_obj=app_dir_obj,
+                s_field="appFolders",
+                t_field="app",
+            )
+        # Defense encrypted
+        for int_dir in self.internal_app_directories.values():
+            dir_obj = parser.scad_id_to_scad_obj[int_dir.id]
+            dir_obj.defense("encrypted").probability = 1.0
+        # API Level
+        self._android_api_level.connect_scad_objects(parser=parser)
+        # Media Store related
+        if self.name == "MediaStore":
+            shared_storage = parser.scad_id_to_scad_obj[
+                parser.filesystem.media_store.id
+            ]
+            parser.create_associaton(
+                s_obj=sys_app,
+                t_obj=shared_storage,
+                s_field="sharedStorage",
+                t_field="mediaStore",
+            )

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from android_parser.main import AndroidParser
     from securicad.model.object import Object
     from android_parser.components.filesystem import FileSystem
+    from android_parser.components.hardware import SystemApp
 
 
 def collect_manifest(manifest: Element, parser: "AndroidParser") -> "Manifest":
@@ -44,11 +45,11 @@ class APILevel(Base):
         return self._api_level
 
     @property
-    def parent(self) -> "Manifest":
+    def parent(self) -> Union["Manifest", "SystemApp"]:
         return self._parent
 
     @parent.setter
-    def parent(self, parent: "Manifest") -> None:
+    def parent(self, parent: Union["Manifest", "SystemApp"]) -> None:
         self._parent = parent
 
     @property
@@ -65,9 +66,12 @@ class APILevel(Base):
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
-        # Association RunsOn
         api_level = parser.scad_id_to_scad_obj[self.id]
-        app_obj = parser.scad_id_to_scad_obj[self.parent.application.id]
+        if self.parent.__class__.__name__ == "SystemApp":
+            app_obj = parser.scad_id_to_scad_obj[self.parent.id]
+        else:
+            app_obj = parser.scad_id_to_scad_obj[self.parent.application.id]
+        # Association RunsOn
         parser.create_associaton(
             s_obj=api_level,
             t_obj=app_obj,
@@ -111,7 +115,8 @@ class Manifest:
             *self.api_levels.values(),
         ]:
             obj.parent = self
-        self.application.create_app_storage()
+        self._parser.filesystem.create_app_storage(app=self.application)
+        # self.application.create_app_storage()
 
     @property
     def package(self) -> str:
@@ -262,7 +267,7 @@ class Manifest:
                 f"{__file__}: Cannot create an scad object without a valid parser"
             )
             return
-        app_scad_obj = parser.scad_id_to_scad_obj[self.application]
+        app_scad_obj = parser.scad_id_to_scad_obj[self.application.id]
         for api_level in self.api_levels.values():
             api_level.connect_scad_objects(parser=parser)
         # Association UsesPermission
@@ -283,16 +288,22 @@ class Manifest:
                 t_field="usesPermission",
             )
             if uses_perm.max_sdk_version:
-                api_scad_obj = parser.scad_id_to_scad_obj[
-                    self.api_levels[uses_perm.max_sdk_version].id
-                ]
-                # Association MaxSDKVersion
-                parser.create_associaton(
-                    s_obj=uses_perm_scad_obj,
-                    t_obj=api_scad_obj,
-                    s_field="apiLevels",
-                    t_field="usesPermissions",
-                )
+                try:
+                    api_scad_obj = parser.scad_id_to_scad_obj[
+                        self.api_levels[uses_perm.max_sdk_version].id
+                    ]
+                    # Association MaxSDKVersion
+                    parser.create_associaton(
+                        s_obj=uses_perm_scad_obj,
+                        t_obj=api_scad_obj,
+                        s_field="apiLevels",
+                        t_field="usesPermissions",
+                    )
+                except KeyError:
+                    log.debug(
+                        f"{uses_perm.name} has maxSDK version {uses_perm.max_sdk_version}, but app targets {self.min_sdk_version} and above, so ignoring association"
+                    )
+
         # Association ApplicationPermissions
         for permission in self.scad_permission_objs.values():
             parser.create_associaton(
@@ -332,3 +343,4 @@ class Manifest:
                     s_field="permissions",
                     t_field="permissionContainer",
                 )
+        self.application.connect_scad_objects(parser=parser)

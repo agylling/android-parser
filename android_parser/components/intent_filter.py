@@ -25,6 +25,10 @@ class Intent(Base):
     def asset_type(self) -> str:
         return "Intent"
 
+    @property
+    def parent(self) -> "Application":
+        return self._parent
+
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         """creates an Intent androidLang securiCAD object
         \nKeyword arguments:
@@ -35,7 +39,7 @@ class Intent(Base):
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
-        application_obj = self.parent
+        application_obj = parser.scad_id_to_scad_obj[self.parent.id]
         intent_scad_obj = parser.scad_id_to_scad_obj[self.id]
         # Association CreateIntent
         parser.create_associaton(
@@ -53,7 +57,9 @@ class Intent(Base):
                 s_field="components",
                 t_field="intents",
             )
-        intent_filters = self.parent.intent_fitlers
+
+        components: List["AndroidComponent"] = self.parent.components
+        intent_filters = [x for y in components for x in y.intent_filters]
         for intent_filter in intent_filters:
             for action in intent_filter.actions:
                 action_scad_obj = parser.scad_id_to_scad_obj[action.id]

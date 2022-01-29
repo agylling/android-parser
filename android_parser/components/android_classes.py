@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from android_parser.main import AndroidParser
     from securicad.model.object import Object
     from android_parser.components.intent_filter import IntentFilter, Intent
+    from android_parser.components.hardware import SystemApp
 
 
 class MissingAndroidParser(Exception):
@@ -303,7 +304,7 @@ class Permission(Base):
 @dataclass()
 class UID(Base):
     _name: str = field()
-    _parent: "Application" = field()
+    _parent: Union["Application", "SystemApp"] = field()
 
     @property
     def asset_type(self) -> str:
@@ -312,6 +313,22 @@ class UID(Base):
     @property
     def name(self) -> str:
         return self._name
+
+    def create_scad_objects(self, parser: "AndroidParser") -> None:
+        super().create_scad_objects(parser)
+        parser.create_object(python_obj=self)
+
+    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+        super().connect_scad_objects(parser)
+        parent: Union["Application", "SystemApp"] = self.parent
+        app = parser.scad_id_to_scad_obj[parent.id]
+        uid = parser.scad_id_to_scad_obj[self.id]
+        parser.create_associaton(
+            s_obj=app,
+            t_obj=uid,
+            s_field="uid",
+            t_field="app",
+        )
 
 
 @dataclass(eq=True)
@@ -495,18 +512,17 @@ class BaseComponent(Base):
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
         component = parser.scad_id_to_scad_obj[self.id]
-        # Association Process
+        # Association SeperateProcess
         if self.attributes.get("process"):
             process_scad_obj = parser.scad_id_to_scad_obj[self.process.id]
-            app_obj = self.parent
             parser.create_associaton(
                 s_obj=process_scad_obj,
-                t_obj=app_obj,
-                s_field="app",
-                t_field="uid",
+                t_obj=component,
+                s_field="component",
+                t_field="process",
             )
         manifest_parent = self.manifest_parent
-        # Association SeperateProcess
+        # Association AndroidPermission
         if self.permission:
             permission = self.manifest_parent.scad_permission_objs[self.permission]
             parser.create_associaton(
@@ -522,3 +538,6 @@ class BaseComponent(Base):
         # Defense notUsingIntentExtras
         # TODO: A static code analysis scanner to determine this probability
         component.defense("notUsingIntentExtras").probability = 0.5
+        # Intent_filters
+        for intent_filter in self.intent_filters:
+            intent_filter.connect_scad_objects(parser=parser)

@@ -96,6 +96,7 @@ class Provider(BaseComponent):
 
     def create_scad_objects(self, parser: "AndroidParser") -> None:
         super().create_scad_objects(parser=parser)
+        parser.create_object(python_obj=self)
         if not parser:
             log.error(
                 f"{__file__}: Cannot create an scad object without a valid parser"
@@ -106,26 +107,30 @@ class Provider(BaseComponent):
         # TODO: GrantURIPermission
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
-        super().connect_scad_objects(parser)
+        super().connect_scad_objects(parser=parser)
         provider_obj = parser.scad_id_to_scad_obj[self.id]
         # Association externalAppsRequireReadPermissions
-        read_perm_obj = self.manifest_parent.scad_permission_objs[self.read_permission]
-        parser.create_associaton(
-            s_obj=provider_obj,
-            t_obj=read_perm_obj,
-            s_field="readPermission",
-            t_field="readProviders",
-        )
+        if self.read_permission:
+            read_perm_obj = self.manifest_parent.scad_permission_objs[
+                self.read_permission
+            ]
+            parser.create_associaton(
+                s_obj=provider_obj,
+                t_obj=read_perm_obj,
+                s_field="readPermission",
+                t_field="readProviders",
+            )
         # Association externalAppsRequireWritePermissions
-        write_perm_obj = self.manifest_parent.scad_permission_objs[
-            self.write_permission
-        ]
-        parser.create_associaton(
-            s_obj=provider_obj,
-            t_obj=write_perm_obj,
-            s_field="readPermission",
-            t_field="writeProviders",
-        )
+        if self.write_permission:
+            write_perm_obj = self.manifest_parent.scad_permission_objs[
+                self.write_permission
+            ]
+            parser.create_associaton(
+                s_obj=provider_obj,
+                t_obj=write_perm_obj,
+                s_field="readPermission",
+                t_field="writeProviders",
+            )
         # Association PathPermissions
         for path_perm in self.path_permissions:
             path_perm_obj = parser.scad_id_to_scad_obj[path_perm.id]

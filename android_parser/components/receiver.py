@@ -80,7 +80,7 @@ class Receiver(BaseComponent):
         parser.create_object(asset_type=self.asset_type, python_obj=self)
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
-        super().connect_scad_objects(parser)
+        super().connect_scad_objects(parser=parser)
         receiver = parser.scad_id_to_scad_obj[self.id]
         # Defense notContextRegistered
         receiver.defense("notContextRegistered").probability = (
