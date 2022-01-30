@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from securicad.model.object import Object
     from android_parser.components.hardware import SystemApp
     from android_parser.components.application import Application
+    from android_parser.utilities.malicious_application import MaliciousApp
 
 
 class Volume(Enum):
@@ -140,7 +141,9 @@ class FileSystem:
     def media_store(self) -> "SharedStorage":
         return self._media_store
 
-    def create_app_storage(self, app: Union["Application", "SystemApp"]) -> None:
+    def create_app_storage(
+        self, app: Union["Application", "SystemApp", "MaliciousApp"]
+    ) -> None:
         """Generates the application directories
         \n Keyword arguments:
         \t app - Either an Application or SystemApp instance

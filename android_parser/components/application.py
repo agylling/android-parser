@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from android_parser.main import AndroidParser
     from android_parser.components.intent_filter import IntentFilter
     from android_parser.components.filesystem import Directory
+    from android_parser.utilities.malicious_application import MaliciousApp
 
 AndroidComponent = Union[Activity, Provider, Service, Receiver]
 
@@ -281,10 +282,10 @@ class Application(Base):
 
 @dataclass()
 class ContentResolver(Base):
-    _parent: "Application" = field(init=True)
+    _parent: Union["Application", "MaliciousApp"] = field(init=True)
 
     @property
-    def parent(self) -> "Application":
+    def parent(self) -> Union["Application", "MaliciousApp"]:
         return self._parent
 
     @property

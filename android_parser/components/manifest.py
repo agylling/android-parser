@@ -67,7 +67,7 @@ class APILevel(Base):
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser)
         api_level = parser.scad_id_to_scad_obj[self.id]
-        if self.parent.__class__.__name__ == "SystemApp":
+        if self.parent.__class__.__name__ in ["SystemApp", "MaliciousApp"]:
             app_obj = parser.scad_id_to_scad_obj[self.parent.id]
         else:
             app_obj = parser.scad_id_to_scad_obj[self.parent.application.id]

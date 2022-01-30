@@ -21,6 +21,8 @@ from android_parser.components import (
 )
 from android_parser.utilities.log import log
 from android_parser.utilities import attacker as attacker
+from android_parser.utilities.malicious_application import MaliciousApp
+
 from securicad.model import (
     Model,
     json_serializer,
@@ -74,7 +76,11 @@ class AndroidParser:
     manifests: Dict[str, "Manifest"] = field(default_factory=dict, init=False)
     filesystem: "FileSystem" = field(default=None, init=False)
     device: "Device" = field(default=None, init=False)
+    malicious_application: "MaliciousApp" = field(default=None, init=False)
     _attacker: "Object" = field(default=None, init=False)
+    scad_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
+    # An incremental id variable for objects
+    object_id: int = field(default=0, init=False)
 
     @property
     def attacker(self) -> "Object":
@@ -83,24 +89,6 @@ class AndroidParser:
     @attacker.setter
     def attacker(self, attacker: "Object") -> None:
         self._attacker = attacker
-
-    # Key = package name
-    # api_levels: Dict[str:Object] = field(default_factory=dict, init=False)
-    # applications: Dict[Union[int, str], Object] = field(
-    #    default_factory=dict, init=False
-    # )
-    # permission_trees: Dict[str, "Object"] = field(default_factory=dict, init=False)
-    # permission_groups: Dict[str, "Object"] = field(default_factory=dict, init=False)
-    # permissions: Dict[str, "Object"] = field(default_factory=dict, init=False)
-    # activities: Dict[Union[int, str], "Object"] = field(
-    #    default_factory=dict, init=False
-    # )
-    # providers: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
-    # receivers: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
-    # services: Dict[Union[int, str], "Object"] = field(default_factory=dict, init=False)
-    scad_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
-    # An incremental id variable for objects
-    object_id: int = field(default=0, init=False)
 
     def write_model_file(
         self, output_path: Path, mar_path: Optional[Path] = None
@@ -223,6 +211,9 @@ class AndroidParser:
         root = xml_data.getroot()
         manifest_obj = manifest.collect_manifest(root, self)
         self.manifests[manifest_obj.package] = manifest_obj
+        # Malicious app (attacker's application)
+        self.malicious_application = MaliciousApp()
+        self.filesystem.create_app_storage(app=self.malicious_application)
 
     def _create_scad_objects(self) -> None:
         """Creates the securiCAD asset objects within our model from the manifest data collected"""
@@ -231,6 +222,7 @@ class AndroidParser:
         for manifest in self.manifests.values():
             manifest.create_objects(parser=self)
         attacker.create_attacker(parser=self)
+        self.malicious_application.create_scad_objects(parser=self)
 
     def _connect_scad_objects(self) -> None:
         """Connects the created securiCAD objects"""
@@ -238,6 +230,7 @@ class AndroidParser:
         self.device.connect_scad_objects(parser=self)
         for manifest in self.manifests.values():
             manifest.connect_scad_objects(parser=self)
+        self.malicious_application.connect_scad_objects(parser=self)
         attacker.connect_attacker(parser=self)
 
     def create_associaton(

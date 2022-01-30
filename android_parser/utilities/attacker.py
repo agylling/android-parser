@@ -12,8 +12,5 @@ def create_attacker(parser: "AndroidParser") -> None:
 
 def connect_attacker(parser: "AndroidParser") -> None:
     if parser.attacker != None:
-        """parser.attacker_object.connect(
-            parser.<scadObject>.attack_step("attackStepName")
-        )
-        """
-        pass
+        malicious_app = parser.scad_id_to_scad_obj[parser.malicious_application.id]
+        parser.attacker.connect(malicious_app.attack_step("exploitApplications"))
