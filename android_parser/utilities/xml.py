@@ -1,5 +1,7 @@
-from xml.etree.ElementTree import Element, ElementTree
-from typing import Dict, Union
+from __future__ import annotations
+
+from typing import Any, Dict, Union
+from xml.etree.ElementTree import Element
 
 
 class ComponentNotFound(Exception):
@@ -8,7 +10,7 @@ class ComponentNotFound(Exception):
 
 def get_attributes(tag: Element) -> Dict[str, Union[bool, str, float, int]]:
     raw_attribs = tag.attrib
-    attribs = {}
+    attribs: dict[str, Any] = {}
     for key, value in raw_attribs.items():
         try:
             cleaned_key = key.split("}")[1]

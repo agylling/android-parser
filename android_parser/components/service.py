@@ -1,14 +1,18 @@
-from xml.etree.ElementTree import Element
-from typing import Optional, List, TYPE_CHECKING
+from __future__ import annotations
 
-from black import sys
-from android_parser.utilities.log import log
 from dataclasses import dataclass, field
-from android_parser.utilities import (
-    xml as _xml,
+from typing import TYPE_CHECKING, List
+from xml.etree.ElementTree import Element
+
+from android_parser.components.android_classes import (
+    Base,
+    BaseComponent,
+    IntentType,
+    MetaData,
 )
-from android_parser.components.android_classes import BaseComponent, MetaData, Base
-from android_parser.components.intent_filter import IntentFilter, IntentType
+from android_parser.components.intent_filter import IntentFilter
+from android_parser.utilities import xml as _xml
+from android_parser.utilities.log import log
 
 if TYPE_CHECKING:
     from android_parser.main import AndroidParser
@@ -16,11 +20,11 @@ if TYPE_CHECKING:
 
 @dataclass()
 class ForegroundServiceType(Base):
-    _parent: "Service" = field()
+    _parent: Service = field()
     foreground_service_types: List[str] = field(default_factory=list)
 
-    @property
-    def parent(self) -> "Service":
+    @property  # type: ignore
+    def parent(self) -> Service:
         return self._parent
 
     @property
@@ -31,11 +35,11 @@ class ForegroundServiceType(Base):
     def asset_type(self) -> str:
         return "ForegroundServiceType"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
         sys_features = {
             "camera": parser.device.camera_module,
@@ -45,14 +49,14 @@ class ForegroundServiceType(Base):
         }
         # TODO: dataSync, connectedDevice, phoneCall, mediaProjection, mediaPlayback
         # Association AccessesSystemFeature / Association AccessesSystemFeature
-        foreground_service = parser.scad_id_to_scad_obj[self.id]
+        foreground_service = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         for foreground_service_type in self.foreground_service_types:
             t_obj = sys_features.get(foreground_service_type)
             s_field = (
                 "systemFeature" if foreground_service_type != "phoneCall" else "dialer"
             )
             if t_obj:
-                sys_feature_scad_obj = parser.scad_id_to_scad_obj[t_obj.id]
+                sys_feature_scad_obj = parser.scad_id_to_scad_obj[t_obj.id]  # type: ignore
                 parser.create_associaton(
                     s_obj=foreground_service,
                     t_obj=sys_feature_scad_obj,
@@ -64,7 +68,7 @@ class ForegroundServiceType(Base):
 @dataclass
 class Service(BaseComponent):
     # https://developer.android.com/guide/topics/manifest/service-element
-    _foreground_service_type: "ForegroundServiceType" = field(default=None)
+    _foreground_service_type: ForegroundServiceType = field(default=None)  # type: ignore
 
     def __post_init__(self):
         super().__post_init__()
@@ -87,14 +91,15 @@ class Service(BaseComponent):
         return "Service"
 
     @property
-    def foreground_service_type(self) -> "ForegroundServiceType":
+    def foreground_service_type(self) -> ForegroundServiceType:
         return self._foreground_service_type
 
     @property
     def isolatedProcess(self) -> bool:
-        return self.attributes.get("isolatedProcess")
+        return self.attributes["isolatedProcess"]
 
-    def from_xml(service: Element) -> "Service":
+    @staticmethod
+    def from_xml(service: Element) -> Service:
         """Creates an Service object out of a xml service tag \n
         Keyword arguments:
         \t service: An service Element object
@@ -105,7 +110,7 @@ class Service(BaseComponent):
         attribs.setdefault("enabled", True)
         attribs.setdefault("directBootAware", False)
         attribs.setdefault("fullBackupOnly", False)
-        meta_datas = []
+        meta_datas: List[MetaData] = []
         for meta_data in service.findall("meta-data"):
             meta_datas.append(MetaData.from_xml(meta_data))
         intent_filters = IntentFilter.collect_intent_filters(parent=service)
@@ -120,20 +125,20 @@ class Service(BaseComponent):
             intent_filters=intent_filters,
         )
 
-    def print_intents(self, intent_type: "IntentType") -> List[str]:
+    def print_intents(self, intent_type: IntentType) -> List[str]:  # type: ignore
         """Prints the possible intents that can be done to access the Service\n
         Keyword arguments:
         """
-        if self.intent_filters and self.attribs["exported"] == False:
+        if self.intent_filters and self.attributes["exported"] == False:
             log.info(
-                f"Service {self.attribs['name']} has intent filters but is not exported. External components cannot reach it"
+                f"Service {self.attributes['name']} has intent filters but is not exported. External components cannot reach it"
             )
         if intent_type == IntentType.IMPLICIT:
             raise (NotImplemented)
         elif intent_type == IntentType.EXPLICIT:
             raise (NotImplemented)
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser=parser)
         if not parser:
             log.error(
@@ -143,12 +148,12 @@ class Service(BaseComponent):
         parser.create_object(asset_type=self.asset_type, python_obj=self)
         self.foreground_service_type.create_scad_objects(parser=parser)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        service = parser.scad_id_to_scad_obj[self.id]
+        service = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         self.foreground_service_type.connect_scad_objects(parser=parser)
         # Association foregroundServicesTypes
-        foreground_service = parser.scad_id_to_scad_obj[self.foreground_service_type.id]
+        foreground_service = parser.scad_id_to_scad_obj[self.foreground_service_type.id]  # type: ignore
         parser.create_associaton(
             s_obj=service,
             t_obj=foreground_service,

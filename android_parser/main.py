@@ -1,68 +1,37 @@
 from __future__ import annotations
-from aifc import Error
-from mimetypes import init
-import sys
-import typer
-import datetime
-import xml.etree.ElementTree as ET
+
 import configparser
+import datetime
 import glob
 import json
+import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Dict, List, Optional, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any, BinaryIO, Dict, Optional
 
-from typer.models import DefaultType
-from android_parser.utilities import constants as constants
-from android_parser.components import (
-    filesystem as filesystem,
-    manifest as manifest,
-    hardware as hardware,
-)
-from android_parser.utilities.log import log
-from android_parser.utilities import attacker as attacker
-from android_parser.utilities.malicious_application import MaliciousApp
-
-from securicad.model import (
-    Model,
-    json_serializer,
-    es_serializer,
-    scad_serializer,
-    object,
-)
+import typer
+from securicad.langspec import Lang  # type: ignore pylint: disable=import-error
+from securicad.model import Model, es_serializer, json_serializer, scad_serializer
 from securicad.model.exceptions import (
-    InvalidAssetException,
     DuplicateAssociationException,
+    InvalidAssetException,
 )
-from securicad.langspec import Lang
 from securicad.model.object import Object
 
+from android_parser.components import filesystem as filesystem
+from android_parser.components import hardware as hardware
+from android_parser.components import manifest as manifest
+from android_parser.utilities import attacker as attacker
+from android_parser.utilities import constants as constants
+from android_parser.utilities import view_generation as view_generation
+from android_parser.utilities.log import log
+from android_parser.utilities.malicious_application import MaliciousApp
+
 if TYPE_CHECKING:
-    from android_parser.components.application import Application
     from android_parser.components.filesystem import FileSystem
     from android_parser.components.hardware import Device
     from android_parser.components.manifest import Manifest
-    from android_parser.components.provider import Provider
-    from android_parser.components.activity import Activity
-    from android_parser.components.service import Service
-    from android_parser.components.receiver import Receiver
-    from android_parser.components.android_classes import (
-        PermissionTree,
-        PermissionGroup,
-        Permission,
-    )
-
-    AnyClass = Union[
-        Object,
-        Application,
-        Provider,
-        Activity,
-        Service,
-        Receiver,
-        PermissionTree,
-        PermissionGroup,
-        Permission,
-    ]
 
 
 class MissingAttributes(Exception):
@@ -72,62 +41,48 @@ class MissingAttributes(Exception):
 # import tqdm  # alternative progressbar
 @dataclass()
 class AndroidParser:
-    model: Model = field(default=None, init=False)
-    manifests: Dict[str, "Manifest"] = field(default_factory=dict, init=False)
-    filesystem: "FileSystem" = field(default=None, init=False)
-    device: "Device" = field(default=None, init=False)
-    malicious_application: "MaliciousApp" = field(default=None, init=False)
-    _attacker: "Object" = field(default=None, init=False)
+    model: Model = field(default=None, init=False)  # type: ignore
+    manifests: Dict[str, Manifest] = field(default_factory=dict, init=False)
+    filesystem: FileSystem = field(default=None, init=False)  # type: ignore
+    device: Device = field(default=None, init=False)  # type: ignore
+    malicious_application: MaliciousApp = field(default=None, init=False)  # type: ignore
+    _attacker: Object = field(default=None, init=False)  # type: ignore
     scad_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
     # An incremental id variable for objects
     object_id: int = field(default=0, init=False)
 
     @property
-    def attacker(self) -> "Object":
+    def attacker(self) -> Object:
         return self._attacker
 
     @attacker.setter
-    def attacker(self, attacker: "Object") -> None:
+    def attacker(self, attacker: Object) -> None:
         self._attacker = attacker
 
     def write_model_file(
         self, output_path: Path, mar_path: Optional[Path] = None
     ) -> None:
-        def get_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
-            config = configparser.ConfigParser()
-            config.read(get_configpath())
-            if "AUTH" not in config:
-                return None, None, None
-            return (
-                config["AUTH"].get("username"),
-                config["AUTH"].get("password"),
-                config["AUTH"].get("organization"),
-            )
-
         def get_name() -> str:
             name = output_path.name
             if name.lower().endswith(".scad"):
                 name = name[: -len(".scad")]
             return name
 
-        def get_outputpath() -> str:
-            return str(output_path.resolve().parent)
-
         def get_configpath() -> str:
             return str(
                 Path(__file__).resolve().parent.parent.joinpath("lib", "conf.ini")
             )
 
-        def get_mar() -> str:
+        def get_mar() -> Optional[str]:
             if mar_path:
-                return mar_path
+                return str(mar_path)
             config = configparser.ConfigParser()
             config.read(get_configpath())
             if "MAR" not in config:
                 return None
-            return config["MAR"].get("marpath")
+            return str(config["MAR"].get("marpath"))
 
-        mar_path = get_mar()
+        mar_path = get_mar()  # type: ignore
         if not mar_path:
             log.warning(
                 f"No .mar file found for validating the model. Assuming language: {constants.LANG_ID} version {constants.REQUIRED_LANGUAGE_VERSION}"
@@ -137,7 +92,7 @@ class AndroidParser:
         if mar_path:
             if "*" in str(mar_path):
                 try:
-                    open_mar = next(iter(glob.glob(mar_path)))
+                    open_mar = next(iter(glob.glob(mar_path)))  # type: ignore
                 except StopIteration:
                     pass
             else:
@@ -166,7 +121,8 @@ class AndroidParser:
                 json.dump(json_model, f, indent=4, sort_keys=True)
         else:
             output_path = output_path.with_suffix(".sCAD")  # making sure correct suffix
-            # scad_serializer.serialize_model(self.model, output_path)
+            self.model
+            scad_serializer.serialize_model(self.model, output_path)
 
         if not output_path:
             sys.exit(1)
@@ -182,13 +138,13 @@ class AndroidParser:
             self.model = Model(lang=self.lang)
         except StopIteration:
             log.warning(
-                "No .mar file found for validating the model. Using default language {constants.LANG_ID} version {constants.REQUIRED_LANGUAGE}"
+                f"No .mar file found for validating the model. Using default language {constants.LANG_ID} version {constants.REQUIRED_LANGUAGE}"  # type: ignore
             )
             self.model = Model(
-                lang_id=constants.LANG_ID, lang_version=constants.REQUIRED_LANGUAGE
+                lang_id=constants.LANG_ID, lang_version=constants.REQUIRED_LANGUAGE  # type: ignore
             )
 
-        self.__parse()
+        self._parse()
         return es_serializer.serialize_model(self.model)
 
     def _parse(self) -> None:
@@ -197,8 +153,7 @@ class AndroidParser:
         # connect scad objects
         self._connect_scad_objects()
         # generate default views
-        return
-        # TODO:  NotImplemented
+        view_generation.generate_views(parser=self)
 
     def collect(self, input: BinaryIO) -> None:
         """Collects information of an AndroidManifest file wrapped in a Manifest object"""
@@ -234,7 +189,7 @@ class AndroidParser:
         attacker.connect_attacker(parser=self)
 
     def create_associaton(
-        self, s_obj: "Object", t_obj: "Object", s_field: str, t_field: str
+        self, s_obj: Object, t_obj: Object, s_field: str, t_field: str
     ) -> None:
         """Creates an association between two securicad Objects
         \n Keyword arguments:
@@ -248,7 +203,7 @@ class AndroidParser:
             return
         if s_obj == t_obj:
             return
-        if not all(isinstance(x, Object) for x in [s_obj, t_obj]):
+        if not all(isinstance(x, Object) for x in [s_obj, t_obj]):  # type: ignore
             log.error(
                 f"One or more invalid object types. got {type(s_obj)}, {type(t_obj)}, expected <Object>, <Object>"
             )
@@ -261,7 +216,7 @@ class AndroidParser:
 
     def create_object(
         self,
-        python_obj: Optional[AnyClass] = None,
+        python_obj: Optional[Any] = None,
         asset_type: Optional[str] = None,
         name: Optional[str] = None,
     ) -> Optional[Object]:
@@ -284,11 +239,11 @@ class AndroidParser:
                 "To create an scad object, the provided python_obj must have an asset_type property."
             )
         if hasattr(python_obj, "asset_type") and not asset_type:
-            asset_type = python_obj.asset_type
+            asset_type = python_obj.asset_type  # type: ignore
         if hasattr(python_obj, "name"):
-            name = python_obj.name.split(".")[-1]
+            name = python_obj.name.split(".")[-1]  # type: ignore
         try:
-            scad_obj = self.model.create_object(asset_type=asset_type, name=name)
+            scad_obj = self.model.create_object(asset_type=asset_type, name=name)  # type: ignore
             self.scad_id_to_scad_obj[scad_obj.id] = scad_obj
             if python_obj:
                 python_obj.id = scad_obj.id

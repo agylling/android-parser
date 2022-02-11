@@ -1,17 +1,19 @@
-from typing import TYPE_CHECKING, Union, Optional, Dict, List
-from android_parser.utilities.log import log
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from android_parser.utilities import (
-    constants as constants,
-)
+from typing import TYPE_CHECKING, Dict, Optional, Union
+
 from android_parser.components.android_classes import Base
+from android_parser.utilities import constants as constants
+from android_parser.utilities.log import log
 
 if TYPE_CHECKING:
-    from android_parser.main import AndroidParser
     from securicad.model.object import Object
-    from android_parser.components.hardware import SystemApp
+
     from android_parser.components.application import Application
+    from android_parser.components.hardware import SystemApp
+    from android_parser.main import AndroidParser
     from android_parser.utilities.malicious_application import MaliciousApp
 
 
@@ -34,19 +36,19 @@ class FileType(Enum):
     AUDIO = "Audio"
 
 
-def collect_filesystem() -> "FileSystem":
+def collect_filesystem() -> FileSystem:
     return FileSystem()
 
 
 @dataclass()
 class FileSystem:
-    _internal_volume: "VolumeStorage" = field(default=None, init=False)
-    _external_volume: "VolumeStorage" = field(default=None, init=False)
-    _internal_storage_dir: "Directory" = field(default=None, init=False)
-    _external_storage_dir: "Directory" = field(default=None, init=False)
-    _media_store: "SharedStorage" = field(default=None, init=False)
-    paths: Dict[str, "Object"] = field(default_factory=dict, init=False)
-    scoped_storage: Dict[str, "ScopedStorage"] = field(default_factory=dict, init=False)
+    _internal_volume: VolumeStorage = field(default=None, init=False)  # type: ignore
+    _external_volume: VolumeStorage = field(default=None, init=False)  # type: ignore
+    _internal_storage_dir: Directory = field(default=None, init=False)  # type: ignore
+    _external_storage_dir: Directory = field(default=None, init=False)  # type: ignore
+    _media_store: SharedStorage = field(default=None, init=False)  # type: ignore
+    paths: Dict[str, Object] = field(default_factory=dict, init=False)
+    scoped_storage: Dict[str, ScopedStorage] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         def create_volume(name: str, volume: Volume) -> Directory:
@@ -91,7 +93,7 @@ class FileSystem:
         top_dirs = ["data"]
         for top_dir in top_dirs:
             self.internal_storage_dir.create_sub_dir(name=top_dir)
-        data_dir: "Directory" = self.internal_storage_dir.sub_dirs["data"]
+        data_dir: Directory = self.internal_storage_dir.sub_dirs["data"]
         data_dirs = ["media", "data"]
         for sub_dir in data_dirs:
             data_dir.create_sub_dir(name=sub_dir)
@@ -114,63 +116,64 @@ class FileSystem:
         self.external_storage_dir.sub_dirs["Android"].create_sub_dir("data")
 
     @property
-    def internal_volume(self) -> "VolumeStorage":
+    def internal_volume(self) -> VolumeStorage:
         return self._internal_volume
 
     @property
-    def internal_storage_dir(self) -> "Directory":
+    def internal_storage_dir(self) -> Directory:
         return self._internal_storage_dir
 
     @property
-    def external_volume(self) -> "VolumeStorage":
+    def external_volume(self) -> VolumeStorage:
         return self._external_volume
 
     @property
-    def external_storage_dir(self) -> "Directory":
+    def external_storage_dir(self) -> Directory:
         return self._external_storage_dir
 
     @property
-    def int_data_dir(self) -> "Directory":
+    def int_data_dir(self) -> Directory:
         return self.internal_storage_dir.sub_dirs["data"].sub_dirs["data"]
 
     @property
-    def ext_data_dir(self) -> "Directory":
+    def ext_data_dir(self) -> Directory:
         return self.external_storage_dir.sub_dirs["Android"].sub_dirs["data"]
 
     @property
-    def media_store(self) -> "SharedStorage":
+    def media_store(self) -> SharedStorage:
         return self._media_store
 
     def create_app_storage(
-        self, app: Union["Application", "SystemApp", "MaliciousApp"]
+        self, app: Union[Application, SystemApp, MaliciousApp]
     ) -> None:
         """Generates the application directories
         \n Keyword arguments:
         \t app - Either an Application or SystemApp instance
         """
         if app.__class__.__name__ == "Application":
-            if hasattr(app, "attributes") and not app.attributes.get(
+            if hasattr(app, "attributes") and not app.attributes.get(  # type: ignore
                 "requestLegacyExternalStorage"
             ):
                 # App uses scoped storage
-                scoped_storage = ScopedStorage(_name=app.name, _parent=app)
+                scoped_storage = ScopedStorage(_parent=app)
                 self.scoped_storage[app.name] = scoped_storage
             # External files
-            ext_app_dir: "Directory" = self.ext_data_dir.create_sub_dir(
+            ext_app_dir: Directory = self.ext_data_dir.create_sub_dir(
                 name=app.name, dir_type=DataType.APP_SPECIFIC
             )
-            app.external_app_directories[ext_app_dir.path] = ext_app_dir
+            ext_app_dirs = app.external_app_directories  # type: ignore
+            ext_app_dirs[ext_app_dir.path] = ext_app_dir
             ext_cache_dir = ext_app_dir.create_sub_dir(
                 name="cache", dir_type=DataType.APP_SPECIFIC
             )
-            app.external_app_directories[ext_cache_dir.path] = ext_cache_dir
+            ext_app_dirs[ext_cache_dir.path] = ext_cache_dir
             ext_files_dir = ext_app_dir.create_sub_dir(
                 name="files", dir_type=DataType.APP_SPECIFIC
             )
-            app.external_app_directories[ext_files_dir.path] = ext_files_dir
-            ext_files_files = ext_files_dir.create_file(name="dummy.txt")
+            ext_app_dirs[ext_files_dir.path] = ext_files_dir
+            ext_files_files = ext_files_dir.create_file(name="dummy.txt")  # type: ignore
         # Internal files
-        int_app_dir: "Directory" = self.int_data_dir.create_sub_dir(
+        int_app_dir: Directory = self.int_data_dir.create_sub_dir(
             name=app.name, dir_type=DataType.APP_SPECIFIC
         )
         app.internal_app_directories[int_app_dir.path] = int_app_dir
@@ -190,10 +193,10 @@ class FileSystem:
             name="shared_prefs", dir_type=DataType.APP_SPECIFIC
         )
         app.internal_app_directories[int_shared_prefs_dir.path] = int_shared_prefs_dir
-        int_files_files = int_files_dir.create_file(name="dummy.txt")
+        int_files_files = int_files_dir.create_file(name="dummy.txt")  # type: ignore
         # TODO: Databases
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates the storage related androidLang securiCAD objects out of the directory structure
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -211,7 +214,7 @@ class FileSystem:
         self.external_volume.create_scad_objects(parser=parser)
         self.media_store.create_scad_objects(parser=parser)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         """Creates the associations between the created scad objects
         \n Keyword arguments:
         \t parser - the AndroidParser instance that created the securiCAD objects
@@ -220,14 +223,14 @@ class FileSystem:
             log.error(f"{__file__}: Cannot connect scad objects without a valid parser")
             return
 
-        device = parser.scad_id_to_scad_obj[parser.device.id]
+        device = parser.scad_id_to_scad_obj[parser.device.id]  # type: ignore
         if not device:
             log.error(f"{__file__}: There's no device object to connect to")
         else:
-            int_storage = parser.scad_id_to_scad_obj[self.internal_storage_dir.id]
-            ext_storage = parser.scad_id_to_scad_obj[self.external_storage_dir.id]
+            int_storage = parser.scad_id_to_scad_obj[self.internal_storage_dir.id]  # type: ignore
+            ext_storage = parser.scad_id_to_scad_obj[self.external_storage_dir.id]  # type: ignore
             for scoped_storage in self.scoped_storage:
-                scoped_storage_obj = parser.scad_id_to_scad_obj[scoped_storage.id]
+                scoped_storage_obj = parser.scad_id_to_scad_obj[scoped_storage.id]  # type: ignore
                 for volume in [int_storage, ext_storage]:
                     # Association ContainedIn
                     parser.create_associaton(
@@ -243,7 +246,7 @@ class FileSystem:
         self.media_store.connect_scad_objects(parser=parser)
 
 
-def _path(data: Union["Directory", "File"]) -> str:
+def _path(data: Union[Directory, File]) -> str:
     """Returns the absolute path to the file/directory"""
     queue = [data]
     components = [data.name]
@@ -261,7 +264,7 @@ def _path(data: Union["Directory", "File"]) -> str:
 @dataclass
 class SharedStorage(Base):
     _name: str = field()
-    _parent: "FileSystem" = field()
+    _parent: FileSystem = field()
 
     @property
     def name(self) -> str:
@@ -271,21 +274,21 @@ class SharedStorage(Base):
     def asset_type(self) -> str:
         return "SharedStorage"
 
-    @property
-    def parent(self) -> "FileSystem":
+    @property  # type: ignore
+    def parent(self) -> FileSystem:
         return self._parent
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
         # Association ContainedIn
-        shared_storage = parser.scad_id_to_scad_obj[self.id]
+        shared_storage = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         volumes = [self.parent.internal_volume, self.parent.external_volume]
         for volume in volumes:
-            volume_obj = parser.scad_id_to_scad_obj[volume.id]
+            volume_obj = parser.scad_id_to_scad_obj[volume.id]  # type: ignore
             parser.create_associaton(
                 s_obj=shared_storage,
                 t_obj=volume_obj,
@@ -296,7 +299,7 @@ class SharedStorage(Base):
 
 @dataclass()
 class ScopedStorage(Base):
-    _parent: "Application" = field(default=None)
+    _parent: Union[Application, SystemApp, MaliciousApp] = field()
 
     @property
     def name(self) -> str:
@@ -306,7 +309,7 @@ class ScopedStorage(Base):
     def asset_type(self) -> str:
         return "ScopedStorage"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """Creates a ScopedStorage androidLang securiCAD object
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -339,20 +342,20 @@ class VolumeStorage(Base):
         """Returns wether the volume is external or internal"""
         return self._volume
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         file_system = parser.filesystem
-        volume = parser.scad_id_to_scad_obj[self.id]
+        volume = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         if self.volume == Volume.INTERNAL:
             root_directory = file_system.internal_storage_dir
             s_field = "internalStorage"
         else:
             root_directory = file_system.external_storage_dir
             s_field = "externalStorage"
-        root_directory_obj = parser.scad_id_to_scad_obj[root_directory.id]
+        root_directory_obj = parser.scad_id_to_scad_obj[root_directory.id]  # type: ignore
         # Association PlacedInVolumeRoot
         parser.create_associaton(
             s_obj=volume,
@@ -361,7 +364,7 @@ class VolumeStorage(Base):
             t_field="volume",
         )
         # Association InternalStorageVolumes , Association ExternalStorageVolume
-        device = parser.scad_id_to_scad_obj[parser.device.id]
+        device = parser.scad_id_to_scad_obj[parser.device.id]  # type: ignore
         parser.create_associaton(
             s_obj=device,
             t_obj=volume,
@@ -376,9 +379,9 @@ class Directory(Base):
     _name: str = field()
     _data_type: DataType = field(default=DataType.NORMAL)
     _volume: Volume = field(default=Volume.INTERNAL)
-    _parent: Optional["Directory"] = field(default=None, init=False)
-    sub_dirs: Dict[str, "Directory"] = field(default_factory=dict, init=False)
-    files: Dict[str, "File"] = field(default_factory=dict, init=False)
+    _parent: Optional[Directory] = field(default=None, init=False)
+    sub_dirs: Dict[str, Directory] = field(default_factory=dict, init=False)
+    files: Dict[str, File] = field(default_factory=dict, init=False)
 
     @property
     def asset_type(self) -> str:
@@ -403,7 +406,9 @@ class Directory(Base):
         """Returns wether the directory is in external or internal storage"""
         return self._volume
 
-    def create_sub_dir(self, name, dir_type: DataType = DataType.NORMAL) -> "Directory":
+    def create_sub_dir(
+        self, name: str, dir_type: DataType = DataType.NORMAL
+    ) -> Directory:
         """Creates a directory within the directory
         \n Keyword arguments:
         \t name - the name of the directory
@@ -417,10 +422,10 @@ class Directory(Base):
 
     def create_file(
         self,
-        name,
+        name: str,
         file_type: FileType = FileType.DOCUMENT,
         data_type: DataType = DataType.NORMAL,
-    ) -> "File":
+    ) -> File:
         """Creates a file within the directory
         \n Keyword arguments:
         \t name - the name of the file (including extension)
@@ -438,7 +443,7 @@ class Directory(Base):
         self.files[name] = file
         return file
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates the androidLang securiCAD objects belonging to the directory
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -451,14 +456,14 @@ class Directory(Base):
         # files
         for file in self.files.values():
             file.create_scad_objects(parser=parser)
-        parser.filesystem.paths[self.path] = scad_obj
+        parser.filesystem.paths[self.path] = scad_obj  # type: ignore
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        dir_scad_obj = parser.scad_id_to_scad_obj[self.id]
+        dir_scad_obj = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         for sub_dir in self.sub_dirs.values():
             # Association SubOfDirectoryOf
-            sub_dir_scad_obj = parser.scad_id_to_scad_obj[sub_dir.id]
+            sub_dir_scad_obj = parser.scad_id_to_scad_obj[sub_dir.id]  # type: ignore
             parser.create_associaton(
                 s_obj=dir_scad_obj,
                 t_obj=sub_dir_scad_obj,
@@ -469,7 +474,7 @@ class Directory(Base):
             sub_dir.connect_scad_objects(parser=parser)
         for file in self.files.values():
             # Association Contains
-            file_scad_obj = parser.scad_id_to_scad_obj[file.id]
+            file_scad_obj = parser.scad_id_to_scad_obj[file.id]  # type: ignore
             parser.create_associaton(
                 s_obj=dir_scad_obj,
                 t_obj=file_scad_obj,
@@ -483,12 +488,12 @@ class Directory(Base):
 class File(Base):
     _name: str = field()
     _parent: Directory = field()
-    _volume: Volume = field(init=False)
+    _volume: Volume = field(default=None, init=False)  # type: ignore
     _data_type: DataType = field(default=DataType.NORMAL)
     _file_type: FileType = field(default=FileType.DOCUMENT)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "_volume", self.parent.volume)
+        object.__setattr__(self, "_volume", self._parent.volume)
 
     @property
     def asset_type(self) -> str:
@@ -512,11 +517,11 @@ class File(Base):
     def volume(self) -> Volume:
         return self._volume
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates the androidLang securiCAD objects belonging to the directory
         \n Keyword arguments:
         \t parser - an AndroidParser instance
         """
         super().create_scad_objects(parser)
         scad_obj = parser.create_object(asset_type=self.asset_type, python_obj=self)
-        parser.filesystem.paths[self.path] = scad_obj
+        parser.filesystem.paths[self.path] = scad_obj  # type: ignore

@@ -1,5 +1,5 @@
 wheel
-securicad-enterprise==0.3.2
+securicad-enterprise
 securicad-model
 pyecore
 typer

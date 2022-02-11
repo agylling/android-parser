@@ -1,21 +1,21 @@
-from xml.etree.ElementTree import Element
-from typing import List, TYPE_CHECKING, Optional, Union
-from android_parser.utilities.log import log
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from android_parser.utilities import (
-    xml as _xml,
-)
-from android_parser.components.android_classes import IntentType, Base
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from xml.etree.ElementTree import Element
+
+from android_parser.components.android_classes import Base
+from android_parser.utilities import xml as _xml
 
 if TYPE_CHECKING:
+    from android_parser.components.application import AndroidComponent, Application
     from android_parser.main import AndroidParser
-    from android_parser.components.application import Application, AndroidComponent
 
 
-@dataclass
+@dataclass(eq=True)
 class Intent(Base):
-    _parent: "Application" = field()
-    targets: List["AndroidComponent"] = field(default_factory=list)
+    _parent: Application = field()
+    targets: List[AndroidComponent] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -25,11 +25,11 @@ class Intent(Base):
     def asset_type(self) -> str:
         return "Intent"
 
-    @property
-    def parent(self) -> "Application":
+    @property  # type: ignore
+    def parent(self) -> Application:
         return self._parent
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates an Intent androidLang securiCAD object
         \nKeyword arguments:
         \t parser - an AndroidParser instance
@@ -37,10 +37,10 @@ class Intent(Base):
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        application_obj = parser.scad_id_to_scad_obj[self.parent.id]
-        intent_scad_obj = parser.scad_id_to_scad_obj[self.id]
+        application_obj = parser.scad_id_to_scad_obj[self.parent.id]  # type: ignore
+        intent_scad_obj = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         # Association CreateIntent
         parser.create_associaton(
             s_obj=application_obj,
@@ -49,7 +49,7 @@ class Intent(Base):
             t_field="app",
         )
         for target in self.targets:
-            target_scad_obj = parser.scad_id_to_scad_obj[target.id]
+            target_scad_obj = parser.scad_id_to_scad_obj[target.id]  # type: ignore
             # Association startComponent
             parser.create_associaton(
                 s_obj=intent_scad_obj,
@@ -58,11 +58,11 @@ class Intent(Base):
                 t_field="intents",
             )
 
-        components: List["AndroidComponent"] = self.parent.components
+        components: List[AndroidComponent] = self.parent.components
         intent_filters = [x for y in components for x in y.intent_filters]
         for intent_filter in intent_filters:
             for action in intent_filter.actions:
-                action_scad_obj = parser.scad_id_to_scad_obj[action.id]
+                action_scad_obj = parser.scad_id_to_scad_obj[action.id]  # type: ignore
                 # Association IntentAction
                 parser.create_associaton(
                     s_obj=intent_scad_obj,
@@ -71,7 +71,7 @@ class Intent(Base):
                     t_field="intents",
                 )
             for category in intent_filter.categories:
-                cat_scad_obj = parser.scad_id_to_scad_obj[category.id]
+                cat_scad_obj = parser.scad_id_to_scad_obj[category.id]  # type: ignore
                 # Association IntentCategory
                 parser.create_associaton(
                     s_obj=intent_scad_obj,
@@ -80,7 +80,7 @@ class Intent(Base):
                     t_field="intents",
                 )
             for uri in intent_filter.uris:
-                uri_scad_obj = parser.scad_id_to_scad_obj[uri.id]
+                uri_scad_obj = parser.scad_id_to_scad_obj[uri.id]  # type: ignore
                 # Association IntentURI
                 parser.create_associaton(
                     s_obj=intent_scad_obj,
@@ -90,13 +90,13 @@ class Intent(Base):
                 )
 
 
-@dataclass()
+@dataclass(eq=True)
 class Action(Base):
-    attributes: dict = field(default_factory=dict)
+    attributes: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
-        return self.attributes.get("name")
+        return self.attributes.get("name")  # type: ignore
 
     @property
     def asset_type(self) -> str:
@@ -105,7 +105,8 @@ class Action(Base):
         else:
             return "Action"
 
-    def from_xml(action: Element) -> "Action":
+    @staticmethod
+    def from_xml(action: Element) -> Action:
         """Creates an Action object out of a xml action tag \n
         Keyword arguments:
         \t action: An action Element object
@@ -114,18 +115,18 @@ class Action(Base):
         """
         return Action(attributes=_xml.get_attributes(tag=action))
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
-@dataclass()
+@dataclass(eq=True)
 class Category(Base):
-    attributes: dict = field(default_factory=dict)
+    attributes: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
-        return self.attributes.get("name")
+        return self.attributes.get("name")  # type: ignore
 
     @property
     def asset_type(self) -> str:
@@ -136,7 +137,8 @@ class Category(Base):
         else:
             return "Category"
 
-    def from_xml(category: Element) -> "Category":
+    @staticmethod
+    def from_xml(category: Element) -> Category:
         """Creates a Category object out of a xml category tag \n
         Keyword arguments:
         \t category: An category Element object
@@ -145,12 +147,12 @@ class Category(Base):
         """
         return Category(attributes=_xml.get_attributes(tag=category))
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
 
-@dataclass()
+@dataclass(eq=True)
 class URI(Base):
     _name: str = field()
 
@@ -162,12 +164,12 @@ class URI(Base):
     def name(self) -> str:
         return self._name
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         parser.create_object(python_obj=self)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        uri_obj = parser.scad_id_to_scad_obj[self.id]
+        uri_obj = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         # Defense hasScheme
         if "*" in self.name:
             uri_obj.defense("hasScheme").probability = 0.0
@@ -178,7 +180,7 @@ class URI(Base):
 
 @dataclass()
 class Data(Base):
-    _scheme: Union[str, List[str], None] = field(default=None)
+    _scheme: Optional[Union[str, List[str]]] = field(default=None)
     _host: Optional[str] = field(default=None)
     _port: Optional[str] = field(default=None)
     _path: Optional[str] = field(default=None)
@@ -188,7 +190,6 @@ class Data(Base):
 
     def __post_init__(self):
         """Follows the rules for acceptable URIs"""
-        self.uris = self.__create_uris()
         if not self._scheme:
             if self._mime_type:
                 object.__setattr__(self, "_scheme", ["content", "file"])
@@ -222,7 +223,7 @@ class Data(Base):
         return [x for x in possible_paths if x]
 
     def get_uris(self) -> List[str]:
-        uris = set()
+        uris: Set[str] = set()
         # Because mimeType can make it [file: content:]
         if not isinstance(self._scheme, list):
             schemes = [self._scheme]
@@ -245,7 +246,7 @@ class Data(Base):
         return list(uris)
 
     @property
-    def scheme(self) -> Optional[str]:
+    def scheme(self) -> Optional[Union[str, List[str]]]:
         return self._scheme
 
     @property
@@ -263,13 +264,13 @@ class Data(Base):
 
 @dataclass(eq=True)
 class IntentFilter(Base):
+    parent_type: str = field()
     priority: int = field(default=0)
     order: int = field(default=0)
-    actions: List["Action"] = field(default_factory=list)
-    categories: List["Category"] = field(default_factory=list)
-    data: List["Data"] = field(default_factory=list)
-    uris: List["URI"] = field(default_factory=list)
-    parent_type: str = field(default=None)
+    actions: List[Action] = field(default_factory=list)
+    categories: List[Category] = field(default_factory=list)
+    data: List[Data] = field(default_factory=list)
+    uris: List[URI] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -278,14 +279,14 @@ class IntentFilter(Base):
     def __post_init__(self):
         object.__setattr__(self, "uris", self.__create_uris())
 
-    def __create_uris(self) -> List[str]:
+    def __create_uris(self) -> List[URI]:
         """Creates a list of URI strings that can be matched against the data tags of the intent filter
         Returns:
         \tList of uri strings
         """
         # TODO: Note that several data tags in the same intent filter will match all possible permutations between the tags. https://developer.android.com/training/app-links/deep-linking
 
-        uris = set()
+        uris: Set[str] = set()
         # <scheme>://<host>:<port>[<path>|<pathPrefix>|<pathPattern>]
         for data_obj in self.data:
             for path in data_obj.get_uris():
@@ -296,14 +297,14 @@ class IntentFilter(Base):
         hosts = [x.host for x in self.data if x.host]
         ports = [x.port for x in self.data if x.port]
         mime_types = [x.mime_type for x in self.data if x.mime_type]
-        paths = set()
-        for path_list in [x.get_paths() for x in self.data]:
+        paths: Set[str] = set()  # type: ignore
+        for path_list in [x.get_uris() for x in self.data]:
             for path in path_list:
                 if path:
-                    paths.append(path)
-        paths = list(paths)
+                    paths.add(path)  # type: ignore
+        paths: List[str] = list(paths)
         for x in [
-            f"{scheme}://{self.host}{self.port if self.port else ''}/{path}"
+            f"{scheme}://{host}{port if port else ''}/{path}"
             for scheme in schemes
             for host in hosts
             for port in ports
@@ -323,27 +324,28 @@ class IntentFilter(Base):
                 uris.add(x)
         return [URI(_name=uri) for uri in list(uris)]
 
-    def from_xml(intent_filter: Element, parent_type: str) -> "IntentFilter":
+    @staticmethod
+    def from_xml(intent_filter: Element, parent_type: str) -> IntentFilter:
         """Creates an IntentFilter object out of a xml intent-filter tag \n
         Keyword arguments:
-        \intent_filter: An intent-filter Element object
+        \tintent_filter: An intent-filter Element object
         \tparent_type: The xml tag type of the intent-filters parent
         Returns:
         \t IntentFilter object
         """
-        attribs = _xml.get_attributes(intent_filter)
+        attribs: Dict[str, Any] = _xml.get_attributes(intent_filter)
         # Actions
-        intent_actions = []
+        intent_actions: List[Action] = []
         for action in intent_filter.findall("action"):
             intent_actions.append(Action.from_xml(action=action))
         # Categories
-        intent_categories = []
+        intent_categories: List[Category] = []
         for category in intent_filter.findall("category"):
             intent_categories.append(Category.from_xml(category=category))
         # Data
-        intent_data = []
+        intent_data: List[Data] = []
         for data_tag in intent_filter.findall("data"):
-            data_attribs = _xml.get_attributes(data_tag)
+            data_attribs: dict[str, Any] = _xml.get_attributes(data_tag)
             scheme = data_attribs.get("scheme")
             data = Data(
                 _scheme=scheme,
@@ -364,14 +366,15 @@ class IntentFilter(Base):
             parent_type=parent_type,
         )
 
-    def collect_intent_filters(parent: Element) -> List["IntentFilter"]:
+    @staticmethod
+    def collect_intent_filters(parent: Element) -> List[IntentFilter]:
         """Returns a list of IntentFilter objects found within the parent xml tag
         \n Keyword arguments:
         \t parent - an android component xml tag, e.g. service, activity, receiver or provider
         \n Returns
             A list if IntentFilter objects
         """
-        intent_filters = []
+        intent_filters: List[IntentFilter] = []
         for intent_filter in parent.findall("intent-filter"):
             intent_filters.append(
                 IntentFilter.from_xml(intent_filter, parent_type=parent.tag)
@@ -381,7 +384,7 @@ class IntentFilter(Base):
     def print_partial_intent(self) -> List[str]:
         """Prints the intent filter part of an intent, meaning the actions, categories and uris\n"""
         # https://developer.android.com/studio/command-line/adb#IntentSpec
-        partial_intent_strings = set()
+        partial_intent_strings: Set[str] = set()
         for action in self.actions:
             for category in self.categories:
                 for uri in self.uris:
@@ -389,23 +392,23 @@ class IntentFilter(Base):
                     partial_intent_strings.add(f"-a {action} -c {category} -d {uri}")
         return list(partial_intent_strings)
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         # TODO: Can probably create globally unique URIs
         parser.create_object(asset_type="IntentFilter", python_obj=self)
-        for category in self.categories:
+        for i, category in enumerate(self.categories):
             category.create_scad_objects(parser=parser)
-        for action in self.actions:
+        for i, action in enumerate(self.actions):
             action.create_scad_objects(parser=parser)
-        for uri in self.uris:
+        for i, uri in enumerate(self.uris):
             uri.create_scad_objects(parser=parser)
         # TODO order
         # TODO priority
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        intent_filter_scad_obj = parser.scad_id_to_scad_obj[self.id]
-        component_obj = parser.scad_id_to_scad_obj[self.parent.id]
+        intent_filter_scad_obj = parser.scad_id_to_scad_obj[self.id]  # type: ignore
+        component_obj = parser.scad_id_to_scad_obj[self.parent.id]  # type: ignore
         # Association IntentFilter
         parser.create_associaton(
             s_obj=intent_filter_scad_obj,
@@ -414,7 +417,7 @@ class IntentFilter(Base):
             t_field="intentFilters",
         )
         for action in self.actions:
-            action_scad_obj = parser.scad_id_to_scad_obj[action.id]
+            action_scad_obj = parser.scad_id_to_scad_obj[action.id]  # type: ignore
             # Association IntentAction
             parser.create_associaton(
                 s_obj=intent_filter_scad_obj,
@@ -423,7 +426,7 @@ class IntentFilter(Base):
                 t_field="intentFilters",
             )
         for category in self.categories:
-            cat_scad_obj = parser.scad_id_to_scad_obj[category.id]
+            cat_scad_obj = parser.scad_id_to_scad_obj[category.id]  # type: ignore
             # Association IntentCategory
             parser.create_associaton(
                 s_obj=intent_filter_scad_obj,
@@ -432,7 +435,7 @@ class IntentFilter(Base):
                 t_field="intentFilters",
             )
         for uri in self.uris:
-            uri_scad_obj = parser.scad_id_to_scad_obj[uri.id]
+            uri_scad_obj = parser.scad_id_to_scad_obj[uri.id]  # type: ignore
             # Association IntentData
             parser.create_associaton(
                 s_obj=intent_filter_scad_obj,

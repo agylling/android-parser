@@ -4,9 +4,9 @@
 #
 #    ./tools/scripts/create_requirements.sh
 #
-astroid==2.9.0
+astroid==2.9.3
     # via pylint
-black==21.12b0
+black==22.1.0
     # via -r dev-requirements.in
 build==0.7.0
     # via -r dev-requirements.in
@@ -22,7 +22,7 @@ lazy-object-proxy==1.7.1
     # via astroid
 mccabe==0.6.1
     # via pylint
-mypy==0.930
+mypy==0.931
     # via -r dev-requirements.in
 mypy-extensions==0.4.3
     # via
@@ -40,11 +40,11 @@ platformdirs==2.4.1
     #   pylint
 pylint==2.12.2
     # via -r dev-requirements.in
-pyparsing==3.0.6
+pyparsing==3.0.7
     # via packaging
 toml==0.10.2
     # via pylint
-tomli==1.2.3
+tomli==2.0.1
     # via
     #   black
     #   build

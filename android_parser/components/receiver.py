@@ -1,12 +1,17 @@
-from xml.etree.ElementTree import Element
-from typing import List, TYPE_CHECKING
-from android_parser.utilities.log import log
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from android_parser.utilities import (
-    xml as _xml,
+from typing import TYPE_CHECKING, List
+from xml.etree.ElementTree import Element
+
+from android_parser.components.android_classes import (
+    BaseComponent,
+    IntentType,
+    MetaData,
 )
-from android_parser.components.android_classes import BaseComponent, MetaData
-from android_parser.components.intent_filter import IntentFilter, IntentType
+from android_parser.components.intent_filter import IntentFilter
+from android_parser.utilities import xml as _xml
+from android_parser.utilities.log import log
 
 if TYPE_CHECKING:
     from android_parser.main import AndroidParser
@@ -37,7 +42,8 @@ class Receiver(BaseComponent):
     def context_registered(self, value: bool) -> None:
         self._context_registered = value
 
-    def from_xml(receiver: Element) -> "Receiver":
+    @staticmethod
+    def from_xml(receiver: Element) -> Receiver:
         """Creates an Receiver object out of a xml receiver tag \n
         Keyword arguments:
         \t receiver: An receiver Element object
@@ -47,7 +53,7 @@ class Receiver(BaseComponent):
         attribs = _xml.get_attributes(receiver)
         attribs.setdefault("enabled", True)
         attribs.setdefault("directBootAware", False)
-        meta_datas = []
+        meta_datas: List[MetaData] = []
         for meta_data in receiver.findall("meta-data"):
             meta_datas.append(MetaData.from_xml(meta_data))
         intent_filters = IntentFilter.collect_intent_filters(parent=receiver)
@@ -62,13 +68,13 @@ class Receiver(BaseComponent):
             intent_filters=intent_filters,
         )
 
-    def print_intents(self, intent_type: "IntentType") -> List[str]:
+    def print_intents(self, intent_type: "IntentType") -> List[str]:  # type: ignore
         """Prints the possible intents that can be done to access the Broadcast Receiver\n
         Keyword arguments:
         """
-        if self.intent_filters and self.attribs["exported"] == False:
+        if self.intent_filters and self.attributes["exported"] == False:
             log.info(
-                f"Service {self.attribs['name']} has intent filters but is not exported. External components cannot reach it"
+                f"Service {self.attributes['name']} has intent filters but is not exported. External components cannot reach it"
             )
         if intent_type == IntentType.IMPLICIT:
             raise (NotImplemented)
@@ -81,7 +87,7 @@ class Receiver(BaseComponent):
 
     def connect_scad_objects(self, parser: "AndroidParser") -> None:
         super().connect_scad_objects(parser=parser)
-        receiver = parser.scad_id_to_scad_obj[self.id]
+        receiver = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         # Defense notContextRegistered
         receiver.defense("notContextRegistered").probability = (
             0.0 if self.context_registered else 1.0

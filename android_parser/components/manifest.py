@@ -1,31 +1,32 @@
-from xml.etree.ElementTree import Element
-from typing import List, Tuple, TYPE_CHECKING, Dict, Union
-from android_parser.utilities.log import log
-from dataclasses import dataclass, field
-from android_parser.utilities import (
-    xml as _xml,
-    constants as constants,
-)
-import json
+from __future__ import annotations
 
-from android_parser.components.application import Application
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from xml.etree.ElementTree import Element
+
 from android_parser.components.android_classes import (
+    Base,
     Permission,
     PermissionGroup,
+    PermissionTree,
     UsesPermission,
     UsesPermission23,
-    PermissionTree,
-    Base,
 )
+from android_parser.components.application import Application
+from android_parser.utilities import constants as constants
+from android_parser.utilities import xml as _xml
+from android_parser.utilities.log import log
 
 if TYPE_CHECKING:
-    from android_parser.main import AndroidParser
     from securicad.model.object import Object
+
     from android_parser.components.filesystem import FileSystem
     from android_parser.components.hardware import SystemApp
+    from android_parser.main import AndroidParser
+    from android_parser.utilities.malicious_application import MaliciousApp
 
 
-def collect_manifest(manifest: Element, parser: "AndroidParser") -> "Manifest":
+def collect_manifest(manifest: Element, parser: AndroidParser) -> Manifest:
     """Creates a Manifest object out of a manifest xml object
     \nKeyword arguments:
     \t manifest - a manifest xml Element
@@ -33,23 +34,23 @@ def collect_manifest(manifest: Element, parser: "AndroidParser") -> "Manifest":
     \nReturns:
     \t A Manifest object
     """
-    return Manifest.from_xml(manifest, parser)
+    return Manifest.from_xml(manifest=manifest, parser=parser)
 
 
 @dataclass()
 class APILevel(Base):
-    _api_level: int = field()
+    _api_level: int = field(default=None)  # type: ignore
 
     @property
     def api_level(self) -> int:
         return self._api_level
 
     @property
-    def parent(self) -> Union["Manifest", "SystemApp"]:
+    def parent(self) -> Union[Manifest, SystemApp, MaliciousApp]:
         return self._parent
 
     @parent.setter
-    def parent(self, parent: Union["Manifest", "SystemApp"]) -> None:
+    def parent(self, parent: Union[Manifest, SystemApp, MaliciousApp]) -> None:
         self._parent = parent
 
     @property
@@ -60,17 +61,17 @@ class APILevel(Base):
     def asset_type(self) -> str:
         return f"API_LEVEL_{self.api_level}"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        api_level = parser.scad_id_to_scad_obj[self.id]
+        api_level = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         if self.parent.__class__.__name__ in ["SystemApp", "MaliciousApp"]:
-            app_obj = parser.scad_id_to_scad_obj[self.parent.id]
+            app_obj = parser.scad_id_to_scad_obj[self.parent.id]  # type: ignore
         else:
-            app_obj = parser.scad_id_to_scad_obj[self.parent.application.id]
+            app_obj = parser.scad_id_to_scad_obj[self.parent.application.id]  # type: ignore
         # Association RunsOn
         parser.create_associaton(
             s_obj=api_level,
@@ -82,23 +83,23 @@ class APILevel(Base):
 
 @dataclass()
 class Manifest:
-    _parser: "AndroidParser" = field(default=None)
-    application: "Application" = field(default=None)
-    _target_sdk_version: int = field(default=None)
-    _min_sdk_version: int = field(default=None)
-    attributes: dict = field(default_factory=dict)
-    permissions: List["Permission"] = field(default_factory=list)
-    scad_permission_objs: Dict[str, "Object"] = field(
+    _parser: AndroidParser = field(default=None)  # type: ignore
+    application: Application = field(default=None)  # type: ignore
+    _target_sdk_version: int = field(default=None)  # type: ignore
+    _min_sdk_version: int = field(default=None)  # type: ignore
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    permissions: List[Permission] = field(default_factory=list)
+    scad_permission_objs: Dict[str, Object] = field(
         default_factory=dict, init=False, repr=False
     )
-    uses_permissions: List["UsesPermission"] = field(default_factory=list)
-    uses_permissions_sdk_23: List["UsesPermission23"] = field(default_factory=list)
-    permission_groups: Dict[str, "PermissionGroup"] = field(default_factory=dict)
-    permission_trees: Dict[str, "PermissionTree"] = field(default_factory=dict)
-    api_levels: Dict[int, "APILevel"] = field(
+    uses_permissions: List[UsesPermission] = field(default_factory=list)
+    uses_permissions_sdk_23: List[UsesPermission23] = field(default_factory=list)
+    permission_groups: Dict[str, PermissionGroup] = field(default_factory=dict)
+    permission_trees: Dict[str, PermissionTree] = field(default_factory=dict)
+    api_levels: Dict[int, APILevel] = field(
         default_factory=dict,
     )
-    _package: str = field(default=None, init=False)
+    _package: str = field(default=None, init=False)  # type: ignore
 
     def __post_init__(self):
         object.__setattr__(self, "_package", self.attributes.get("package"))
@@ -106,7 +107,7 @@ class Manifest:
             log.error("Missing package information from the manifest tag")
         else:
             del self.attributes["package"]  # Save some memory
-        obj: Union["Application", "Permission", "PermissionGroup", "PermissionTree"]
+        obj: Union[Application, Permission, PermissionGroup, PermissionTree, APILevel]
         for obj in [
             self.application,
             *self.permissions,
@@ -143,22 +144,23 @@ class Manifest:
         self._target_sdk_version = version
 
     @property
-    def parser(self) -> "AndroidParser":
+    def parser(self) -> AndroidParser:
         return self._parser
 
     @parser.setter
-    def parser(self, parser: "AndroidParser") -> None:
+    def parser(self, parser: AndroidParser) -> None:
         self._parser = parser
 
     @property
     def file_system(self) -> "FileSystem":
         return self.parser.filesystem
 
-    def get_uses_permissions(self) -> List[Union["UsesPermission", "UsesPermission23"]]:
+    def get_uses_permissions(self) -> List[Union[UsesPermission, UsesPermission23]]:
         """Returns all UsesPermission and UsesPermission23 objects the Manifest holds"""
         return [*self.uses_permissions, *self.uses_permissions_sdk_23]
 
-    def from_xml(manifest: Element, parser: "AndroidParser") -> "Manifest":
+    @staticmethod
+    def from_xml(manifest: Element, parser: AndroidParser) -> Manifest:
         """Creates an Application object out of a application tag \n
         Keyword arguments:
         \t manifest - An manifest Element object
@@ -168,25 +170,25 @@ class Manifest:
         """
 
         def get_sdk_versions(
-            uses_sdk: Element,
-        ) -> Tuple[int, int, Dict[int, "APILevel"]]:
+            uses_sdk: Optional[Element],
+        ) -> Tuple[int, int, Dict[int, APILevel]]:
             """Takes a uses-sdk xml tag and sets the Manifests sdk version attributes\n
             \n Keyword arguments:
             \t uses_sdk - a uses_sdk xml tag
             \n Returns:
             \t A tuple of (min_sdk, target_sdk, Dict[int, APILevels])
             """
-            min_sdk = constants.MIN_SDK_VERSION
-            target_sdk = constants.MAX_SDK_VERSION
+            min_sdk: int = constants.MIN_SDK_VERSION
+            target_sdk: int = constants.MAX_SDK_VERSION
+            api_levels: Dict[int, APILevel] = {}
             if uses_sdk == None:
                 log.error(
                     f"Missing a uses-sdk tag in the manifest. Cannot determine essential API level information.\n\t Impact: Assuming lowest to highest to lowest API Level"
                 )
-                return (min_sdk, target_sdk)
-            attribs = _xml.get_attributes(uses_sdk)
-            min_sdk = attribs.get("minSdkVersion", min_sdk)
-            target_sdk = attribs.get("targetSdkVersion", target_sdk)
-            api_levels = {}
+            else:
+                attribs = _xml.get_attributes(uses_sdk)
+                min_sdk: int = attribs.get("minSdkVersion", min_sdk)  # type: ignore
+                target_sdk: int = attribs.get("targetSdkVersion", target_sdk)  # type: ignore
             for i in range(min_sdk, target_sdk + 1):
                 api_levels[i] = APILevel(_api_level=i)
             return (min_sdk, target_sdk, api_levels)
@@ -204,9 +206,9 @@ class Manifest:
         # TODO: Uses Features
         manifest.findall("uses-feature")
         # Applications
-        application: List["Application"] = Application.collect_applications(
+        application: Application = Application.collect_applications(
             tag=manifest
-        )
+        )  # type: ignore
         manifest_obj = Manifest(
             _parser=parser,
             attributes=attribs,
@@ -226,7 +228,7 @@ class Manifest:
 
         return manifest_obj
 
-    def create_objects(self, parser: "AndroidParser") -> None:
+    def create_objects(self, parser: AndroidParser) -> None:
         """Responsible for creating securicad assets within the manifest
         \nKeyword arguments:
         \n\tparser - an AndroidParser instance
@@ -242,7 +244,7 @@ class Manifest:
         # Permissions
         for permission in self.permissions:
             permission.create_scad_objects(parser=parser)
-        uses_permission: Union["UsesPermission", "UsesPermission23"]
+        uses_permission: Union[UsesPermission, UsesPermission23]
         for uses_permission in self.get_uses_permissions():
             uses_permission.create_scad_objects(parser=parser)
             # The UsesPermission connects to the permission with that name
@@ -250,14 +252,17 @@ class Manifest:
                 parser=parser, name=uses_permission.name, manifest_obj=self
             )
         # Permission Groups / Permission Trees
-        permission_container: Union["PermissionGroup", "PermissionTree"]
-        for permission_container in [*self.permission_groups, *self.permission_trees]:
+        permission_container: Union[PermissionGroup, PermissionTree]
+        for permission_container in [
+            *self.permission_groups.values(),
+            *self.permission_trees.values(),
+        ]:
             permission_container.create_scad_objects(parser=parser)
 
         # TODO: Uses Feature
         self.application.create_scad_objects(parser=parser)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         """Creates the associations between the created scad objects
         \n Keyword arguments:
         \t parser - the AndroidParser instance that created the securiCAD objects
@@ -267,12 +272,12 @@ class Manifest:
                 f"{__file__}: Cannot create an scad object without a valid parser"
             )
             return
-        app_scad_obj = parser.scad_id_to_scad_obj[self.application.id]
+        app_scad_obj = parser.scad_id_to_scad_obj[self.application.id]  # type: ignore
         for api_level in self.api_levels.values():
             api_level.connect_scad_objects(parser=parser)
         # Association UsesPermission
         for uses_perm in self.get_uses_permissions():
-            uses_perm_scad_obj = parser.scad_id_to_scad_obj[uses_perm.id]
+            uses_perm_scad_obj = parser.scad_id_to_scad_obj[uses_perm.id]  # type: ignore
             parser.create_associaton(
                 s_obj=uses_perm_scad_obj,
                 t_obj=app_scad_obj,
@@ -291,7 +296,7 @@ class Manifest:
                 try:
                     api_scad_obj = parser.scad_id_to_scad_obj[
                         self.api_levels[uses_perm.max_sdk_version].id
-                    ]
+                    ]  # type: ignore
                     # Association MaxSDKVersion
                     parser.create_associaton(
                         s_obj=uses_perm_scad_obj,
@@ -333,7 +338,7 @@ class Manifest:
             permissions = [
                 scad_obj
                 for (x, scad_obj) in self.scad_permission_objs.items()
-                if domain in x.name
+                if domain in x
             ]
             permission_tree_scad_obj = parser.scad_id_to_scad_obj[permission_tree.id]
             for permission in permissions:

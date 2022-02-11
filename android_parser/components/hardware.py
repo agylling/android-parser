@@ -1,25 +1,25 @@
-from typing import TYPE_CHECKING, Union, Dict, List
-from android_parser.utilities.log import log
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from android_parser.utilities import (
-    constants as constants,
-)
-from android_parser.components.android_classes import Base, UID
+from typing import TYPE_CHECKING, Dict, List, Union
+
+from android_parser.components.android_classes import UID, Base
 from android_parser.components.application import ContentResolver
 from android_parser.components.manifest import APILevel
+from android_parser.utilities import constants as constants
 from android_parser.utilities.constants import MAX_SDK_VERSION
 
 if TYPE_CHECKING:
-    from android_parser.main import AndroidParser
     from android_parser.components.filesystem import Directory
+    from android_parser.main import AndroidParser
 
 
 @dataclass
 class Device(Base):
-    system_apps: Dict[str, "SystemApp"] = field(default_factory=dict, init=False)
-    _camera_module: "CameraModule" = field(default=None, init=False)
-    _gps: "GPS" = field(default=None, init=False)
-    _microphone: "Microphone" = field(default=None, init=False)
+    system_apps: Dict[str, SystemApp] = field(default_factory=dict, init=False)
+    _camera_module: CameraModule = field(default=None, init=False)  # type: ignore
+    _gps: GPS = field(default=None, init=False)  # type: ignore
+    _microphone: Microphone = field(default=None, init=False)  # type: ignore
 
     def __post_init__(self) -> None:
         camera_module = CameraModule()
@@ -35,29 +35,29 @@ class Device(Base):
         return "Device"
 
     @property
-    def camera_module(self) -> "CameraModule":
+    def camera_module(self) -> CameraModule:
         return self._camera_module
 
     @property
-    def gps(self) -> "GPS":
+    def gps(self) -> GPS:
         return self._gps
 
     @property
-    def microphone(self) -> "Microphone":
+    def microphone(self) -> Microphone:
         return self._microphone
 
     @property
     def asset_type(self) -> str:
         return "Device"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """Creates an Application androidLang securiCAD object
         \nKeyword arguments:
         \t parser - an AndroidParser instance
         """
         super().create_scad_objects(parser)
         parser.create_object(python_obj=self)
-        components: List[Union["Microphone", "GPS", "CameraModule", "SystemApp"]] = [
+        components: List[Union[Microphone, GPS, CameraModule, SystemApp]] = [
             self.camera_module,
             self.gps,
             self.microphone,
@@ -72,17 +72,17 @@ class Device(Base):
         for system_app in system_apps:
             self.system_apps[system_app] = SystemApp(_name=system_app)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
-        device = parser.scad_id_to_scad_obj[self.id]
-        components: List[Union["Microphone", "GPS", "CameraModule", "SystemApp"]] = [
+        device = parser.scad_id_to_scad_obj[self.id]  # type: ignore
+        components: List[Union[Microphone, GPS, CameraModule, SystemApp]] = [
             self.camera_module,
             self.gps,
             self.microphone,
         ]
         # Association SystemFeature
         for component in components:
-            component_obj = parser.scad_id_to_scad_obj[component.id]
+            component_obj = parser.scad_id_to_scad_obj[component.id]  # type: ignore
             parser.create_associaton(
                 s_obj=device,
                 t_obj=component_obj,
@@ -91,7 +91,7 @@ class Device(Base):
             )
         # Assoication RunsApplications
         for system_app in self.system_apps.values():
-            system_app_obj = parser.scad_id_to_scad_obj[system_app.id]
+            system_app_obj = parser.scad_id_to_scad_obj[system_app.id]  # type: ignore
             parser.create_associaton(
                 s_obj=device,
                 t_obj=system_app_obj,
@@ -107,7 +107,7 @@ class CameraModule(Base):
     def asset_type(self) -> str:
         return "CameraModule"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates a CameraModule androidLang securiCAD object
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -122,7 +122,7 @@ class GPS(Base):
     def asset_type(self) -> str:
         return "Gps"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates a GPS androidLang securiCAD object
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -137,7 +137,7 @@ class Microphone(Base):
     def asset_type(self) -> str:
         return "Microphone"
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates a Microphone androidLang securiCAD object
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -149,12 +149,12 @@ class Microphone(Base):
 @dataclass()
 class SystemApp(Base):
     _name: str = field()
-    _content_resolver: "ContentResolver" = field(default=None, init=False)
-    _uid: "UID" = field(default=None, init=False)
+    _content_resolver: ContentResolver = field(default=None, init=False)  # type: ignore
+    _uid: UID = field(default=None, init=False)  # type: ignore
     internal_app_directories: Dict[str, "Directory"] = field(
         default_factory=dict, init=False
     )
-    _android_api_level: "APILevel" = field(default=None, init=False)
+    _android_api_level: APILevel = field(default=None, init=False)  # type: ignore
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -176,10 +176,10 @@ class SystemApp(Base):
         return self._uid
 
     @property
-    def content_resolver(self) -> "ContentResolver":
+    def content_resolver(self) -> ContentResolver:
         return self._content_resolver
 
-    def create_scad_objects(self, parser: "AndroidParser") -> None:
+    def create_scad_objects(self, parser: AndroidParser) -> None:
         """creates a specific SystemApp androidLang securiCAD object
         \n Keyword arguments:
         \t parser - an AndroidParser instance
@@ -190,14 +190,14 @@ class SystemApp(Base):
         self.process.create_scad_objects(parser=parser)
         self._android_api_level.create_scad_objects(parser=parser)
 
-    def connect_scad_objects(self, parser: "AndroidParser") -> None:
+    def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
         self.content_resolver.connect_scad_objects(parser=parser)
         self.process.connect_scad_objects(parser=parser)
-        sys_app = parser.scad_id_to_scad_obj[self.id]
+        sys_app = parser.scad_id_to_scad_obj[self.id]  # type: ignore
         # Association AppSpecificDirectories
         for app_dir in self.internal_app_directories.values():
-            app_dir_obj = parser.scad_id_to_scad_obj[app_dir.id]
+            app_dir_obj = parser.scad_id_to_scad_obj[app_dir.id]  # type: ignore
             parser.create_associaton(
                 s_obj=sys_app,
                 t_obj=app_dir_obj,
@@ -206,13 +206,13 @@ class SystemApp(Base):
             )
         # Defense encrypted
         for int_dir in self.internal_app_directories.values():
-            dir_obj = parser.scad_id_to_scad_obj[int_dir.id]
+            dir_obj = parser.scad_id_to_scad_obj[int_dir.id]  # type: ignore
             dir_obj.defense("encrypted").probability = 1.0
         # API Level
         self._android_api_level.connect_scad_objects(parser=parser)
         # Media Store related
         if self.name == "MediaStore":
-            shared_storage = parser.scad_id_to_scad_obj[
+            shared_storage = parser.scad_id_to_scad_obj[  # type: ignore
                 parser.filesystem.media_store.id
             ]
             parser.create_associaton(
