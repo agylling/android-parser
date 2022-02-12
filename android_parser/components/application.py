@@ -15,11 +15,14 @@ from android_parser.utilities import xml as _xml
 from android_parser.utilities.log import log
 
 if TYPE_CHECKING:
-    from securicad.model.object import Object
-
     from android_parser.components.filesystem import Directory
     from android_parser.components.hardware import SystemApp
-    from android_parser.components.intent_filter import IntentFilter
+    from android_parser.components.intent_filter import (
+        URI,
+        Action,
+        Category,
+        IntentFilter,
+    )
     from android_parser.components.manifest import Manifest
     from android_parser.main import AndroidParser
     from android_parser.utilities.malicious_application import MaliciousApp
@@ -43,12 +46,18 @@ class Application(Base):
     internal_app_directories: Dict[str, Directory] = field(
         default_factory=dict, init=False
     )
-    _content_resolver: "ContentResolver" = field(default=None, init=False)  # type: ignore
-    _process: "UID" = field(default=None, init=False)  # type: ignore
+    _content_resolver: ContentResolver = field(default=None, init=False)  # type: ignore
+    _process: UID = field(default=None, init=False)  # type: ignore
     _process_is_private: bool = field(default=False, repr=False, init=False)
-    actions: Dict[str, Object] = field(default_factory=dict, init=False)
-    categories: Dict[str, Object] = field(default_factory=dict, init=False)
-    uris: Dict[str, Object] = field(default_factory=dict, init=False)
+    actions: Dict[str, Action] = field(
+        default_factory=dict, init=False
+    )  # To prevent duplicates in model
+    categories: Dict[str, Category] = field(
+        default_factory=dict, init=False
+    )  # To prevent duplicates in model
+    uris: Dict[str, URI] = field(
+        default_factory=dict, init=False
+    )  # To prevent duplicates in model
 
     @property
     def name(self) -> str:
@@ -63,7 +72,7 @@ class Application(Base):
         return self._intent  # type: ignore
 
     @property
-    def process(self) -> "UID":
+    def process(self) -> UID:
         return self._process
 
     @property
@@ -75,7 +84,7 @@ class Application(Base):
         return self._process_is_private
 
     @property
-    def content_resolver(self) -> "ContentResolver":
+    def content_resolver(self) -> ContentResolver:
         return self._content_resolver
 
     @property
@@ -284,6 +293,14 @@ class Application(Base):
                 log.warning(
                     f"Expected a scoped storage object on app {self.name}, but none found"
                 )
+        # Assoication RunsApplications
+        device = parser.scad_id_to_scad_obj[parser.device.id]  # type: ignore
+        parser.create_associaton(
+            s_obj=device,
+            t_obj=app,
+            s_field="apps",
+            t_field="device",
+        )
         # TODO: Association StructuredAppData
         # TODO: Associaton SharedPreferences
         # Defense ScopedStorage

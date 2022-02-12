@@ -25,7 +25,7 @@ from android_parser.components import manifest as manifest
 from android_parser.utilities import attacker as attacker
 from android_parser.utilities import constants as constants
 from android_parser.utilities import view_generation as view_generation
-from android_parser.utilities.log import log
+from android_parser.utilities.log import init_logging, log
 from android_parser.utilities.malicious_application import MaliciousApp
 
 if TYPE_CHECKING:
@@ -311,6 +311,7 @@ def main(
     ),
 ) -> None:
     android_parser = AndroidParser()
+    init_logging(log=log, quiet=quiet, verbose=verbose)
     with open(input.absolute(), mode="rb") as f:
         android_parser.collect(f)
     android_parser.write_model_file(output_path=output, mar_path=mar)

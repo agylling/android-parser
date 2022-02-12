@@ -7,6 +7,7 @@ from securicad.model.exceptions import (
     DuplicateViewObjectException,  # type: ignore pylint: disable=import-error; type: ignore pylint: disable=import-error
 )
 
+from android_parser.components.filesystem import Directory, VolumeStorage
 from android_parser.utilities.log import log
 
 if TYPE_CHECKING:
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from securicad.model.visual.view import View
 
     from android_parser.components.application import AndroidComponent, Application
+    from android_parser.components.hardware import Device
     from android_parser.main import AndroidParser
 
 READ_FILE = None
@@ -219,6 +221,7 @@ def component_view(parser: AndroidParser, component: AndroidComponent) -> None:
         process = parser.scad_id_to_scad_obj[component.process.id]  # type: ignore
         view.add_object(obj=process, x=200)
     global_y: int = 200
+    # App Storage
     if component.__class__.__name__ == "Service":
         if component.foreground_service_type:  # type: ignore
             fg_svc_obj: Object = parser.scad_id_to_scad_obj[component.foreground_service_type.id]  # type: ignore
@@ -241,6 +244,52 @@ def component_view(parser: AndroidParser, component: AndroidComponent) -> None:
                     group=fg_svc_grp, items=grants_component, padding=padding, y=200
                 )
                 global_y += padding
+    if component.__class__.__name__ == "Provider":
+        path_perms = [parser.scad_id_to_scad_obj[x.id] for x in component.path_permissions]  # type: ignore
+        provider_y = -padding
+        if path_perms:
+            perm_grp = view.create_group(
+                name=f"{component.name} Path Permissions",
+                icon=default_icon,
+                y=provider_y,
+            )
+            add_objects_horizontally(group=perm_grp, items=path_perms, padding=padding)
+            provider_y -= padding
+        connected_volumes = [
+            y
+            for x in path_perms
+            for y in x.connected_objects(field="partitions")
+            if y.asset_type not in ["InternalStorage", "ExternalStorage", "Directory"]
+        ]
+        connected_dirs = [
+            y
+            for x in path_perms
+            for y in x.connected_objects(field="directories")
+            if y.asset_type not in ["InternalStorage", "ExternalStorage", "Directory"]
+        ]
+        connected_files = [
+            y
+            for x in path_perms
+            for y in x.connected_objects(field="files")
+            if y.asset_type not in ["InternalStorage", "ExternalStorage", "Directory"]
+        ]
+        if connected_volumes:
+            add_objects_horizontally(
+                group=view, items=connected_volumes, padding=provider_y  # type: ignore
+            )
+        if connected_dirs:
+            directories_grp = view.create_group(
+                name="Directories", icon=default_icon, y=provider_y
+            )
+            add_objects_horizontally(
+                group=directories_grp, items=connected_dirs, padding=padding
+            )
+            provider_y -= padding
+        if connected_files:
+            files_grp = view.create_group(name="Files", icon=default_icon, y=provider_y)
+            add_objects_horizontally(
+                group=files_grp, items=connected_files, padding=padding
+            )
     permissions: List[Object] = []
     for attr in ["permission", "write_permission", "read_permission"]:
         if hasattr(component, attr):
@@ -266,50 +315,49 @@ def component_view(parser: AndroidParser, component: AndroidComponent) -> None:
             y=global_y,
         )
         global_y += padding
-    intent_components: Group = view.create_group(
-        name=f"{view_name} Intent Components", icon=default_icon, y=global_y
-    )
-    intent_components.meta["expand"] = True  # type: ignore
-    intent_components.meta["color"] = colors[0]  # type: ignore
-    local_y: int = 0
-    actions = [
-        parser.scad_id_to_scad_obj[y.id]  # type: ignore
-        for x in component.intent_filters
-        for y in x.actions
-    ]
-    if actions:
-        add_objects_horizontally(
-            group=intent_components, items=actions, padding=padding, y=local_y
+        intent_components: Group = view.create_group(
+            name=f"{view_name} Intent Components", icon=default_icon, y=global_y
         )
-        local_y += padding
-    categories = [
-        parser.scad_id_to_scad_obj[y.id]  # type: ignore
-        for x in component.intent_filters
-        for y in x.categories
-    ]
-    if categories:
-        add_objects_horizontally(
-            group=intent_components, items=categories, padding=padding, y=local_y
-        )
-        local_y += padding
-    uris = [
-        parser.scad_id_to_scad_obj[y.id]  # type: ignore
-        for x in component.intent_filters
-        for y in x.uris
-    ]
-    if uris:
-        print([x.asset_type for x in uris])
-        add_objects_horizontally(
-            group=intent_components, items=uris, padding=padding, y=local_y
-        )
-        local_y += padding
-    intent = parser.scad_id_to_scad_obj[component.parent.intent.id]  # type: ignore
-    intent_components.add_object(obj=intent, y=local_y)
+        intent_components.meta["expand"] = True  # type: ignore
+        intent_components.meta["color"] = colors[0]  # type: ignore
+        local_y: int = 0
+        actions = [
+            parser.scad_id_to_scad_obj[y.id]  # type: ignore
+            for x in component.intent_filters
+            for y in x.actions
+        ]
+        if actions:
+            add_objects_horizontally(
+                group=intent_components, items=actions, padding=padding, y=local_y
+            )
+            local_y += padding
+        categories = [
+            parser.scad_id_to_scad_obj[y.id]  # type: ignore
+            for x in component.intent_filters
+            for y in x.categories
+        ]
+        if categories:
+            add_objects_horizontally(
+                group=intent_components, items=categories, padding=padding, y=local_y
+            )
+            local_y += padding
+        uris = [
+            parser.scad_id_to_scad_obj[y.id]  # type: ignore
+            for x in component.intent_filters
+            for y in x.uris
+        ]
+        if uris:
+            add_objects_horizontally(
+                group=intent_components, items=uris, padding=padding, y=local_y
+            )
+            local_y += padding
+        intent = parser.scad_id_to_scad_obj[component.parent.intent.id]  # type: ignore
+        intent_components.add_object(obj=intent, y=local_y)
 
 
 def application_view(parser: AndroidParser):
     bounding_boxes: Dict[Group, BoundingBox] = {}
-    # padding = 200
+    padding = 200
 
     def fill_component_grp(grp: Group, components: List[AndroidComponent]) -> None:
         for idx, component in enumerate(components):
@@ -326,14 +374,102 @@ def application_view(parser: AndroidParser):
             if component_obj.__class__.__name__ == "ContentProvider":
                 pass
 
-    applications: List["Application"] = [
-        x.application for x in parser.manifests.values()
-    ]
+    def fill_volume(
+        volume: VolumeStorage,
+        root: Directory,
+        filesystem_grp: Group,
+        multiplier: int = 1,
+    ):
+        filesystem_grp.add_object(obj=parser.scad_id_to_scad_obj[volume.id], x=multiplier * 300)  # type: ignore
+        root_grp_name = root.name if root.name else "/"
+        root_grp = filesystem_grp.create_group(
+            name=root_grp_name,
+            icon=default_icon,
+            x=multiplier * 300,
+            y=-padding,
+        )
+        root_grp.meta["expand"] = False  # type: ignore
+        root_grp.meta["color"] = colors[4]  # type: ignore
+        root_grp.add_object(obj=parser.scad_id_to_scad_obj[root.id])  # type: ignore
+        sub_dirs = root.sub_dirs.values()
+        local_y = 0
+        for i, x in enumerate([x for x in sub_dirs]):  # type: ignore
+            sub_dir_obj = parser.scad_id_to_scad_obj[x.id]  # type: ignore
+            local_y += -1.5 * padding if x.sub_dirs else -1 * padding
+            sub_dir_grp = root_grp.create_group(
+                name=x.name, icon=default_icon, x=1.5 * multiplier * padding, y=local_y  # type: ignore
+            )
+            sub_dir_grp.meta["expand"] = True  # type: ignore
+            sub_dir_grp.meta["color"] = colors[5]  # type: ignore
+            sub_dir_grp.add_object(obj=sub_dir_obj)
+            sub_sub_dirs = x.sub_dirs.values()
+            for j, z in enumerate(
+                [parser.scad_id_to_scad_obj[y.id] for y in sub_sub_dirs]  # type: ignore
+            ):
+                if multiplier == -1:
+                    local_x = -padding / 2 - padding * j
+                else:
+                    local_x = padding / 2 + padding * j
+                sub_dir_grp.add_object(
+                    obj=parser.scad_id_to_scad_obj[z.id],
+                    x=local_x,
+                    y=padding / 2,
+                )
 
+    view = parser.model.create_view(f"Device Overview")
+
+    device: Device = parser.device
+    device_obj: Object = parser.scad_id_to_scad_obj[device.id]  # type: ignore
+    device_grp = view.create_group("Device", icon=default_icon, y=-1.5 * padding)
+    device_grp.add_object(device_obj)
+    device_grp.meta["color"] = colors[0]  # type: ignore
+    device_grp.meta["expand"] = True  # type: ignore
+    device_y = -padding
+    hw_objs: List[Object] = [
+        parser.scad_id_to_scad_obj[x.id] for x in device.all_hardware_components()  # type: ignore
+    ]
+    if hw_objs:
+        hw_grp = device_grp.create_group(name="Hardware Components", icon=default_icon)
+        hw_grp.meta["color"] = colors[1]  # type: ignore
+        hw_grp.meta["expand"] = True  # type: ignore
+        bb = add_objects_horizontally(group=hw_grp, items=hw_objs, padding=padding)
+        hw_grp.x = padding + bb.get_width() / 2
+    system_apps = [
+        parser.scad_id_to_scad_obj[x.id] for x in device.system_apps.values()  # type: ignore
+    ]
+    if system_apps:
+        sys_app_grp = device_grp.create_group(name="System Apps", icon=default_icon)
+        sys_app_grp.meta["color"] = colors[1]  # type: ignore
+        sys_app_grp.meta["expand"] = True  # type: ignore
+        bb = add_objects_horizontally(
+            group=sys_app_grp, items=system_apps, padding=padding
+        )
+        sys_app_grp.x = -padding - bb.get_width() / 2
+    # Filesystem
+    filesystem_grp = device_grp.create_group(
+        name="Filesystem", icon=default_icon, y=device_y
+    )
+    filesystem_grp.meta["expand"] = True  # type: ignore
+    filesystem_grp.meta["color"] = colors[3]  # type: ignore
+    device_y -= padding
+    # internal storage
+    int_volume: VolumeStorage = parser.filesystem.internal_volume
+    root: Directory = parser.filesystem.internal_storage_dir
+    fill_volume(
+        volume=int_volume, root=root, filesystem_grp=filesystem_grp, multiplier=-1
+    )
+    # External storage
+    ext_volume: VolumeStorage = parser.filesystem.external_volume
+    ext_root: Directory = parser.filesystem.external_storage_dir
+    fill_volume(volume=ext_volume, root=ext_root, filesystem_grp=filesystem_grp)
+    # Shared media
+    media_storage = parser.scad_id_to_scad_obj[parser.filesystem.media_store.id]  # type: ignore
+    filesystem_grp.add_object(obj=media_storage)
+
+    applications: List[Application] = [x.application for x in parser.manifests.values()]
     for i, app in enumerate(applications):
-        app_view = parser.model.create_view(f"{app.name} Overview")
-        app_grp: Group = app_view.create_group(name=app.name, icon=default_icon)
-        app_grp.meta["expand"] = False  # type: ignore
+        app_grp: Group = view.create_group(name=app.name, icon=default_icon)
+        app_grp.meta["expand"] = True  # type: ignore
         app_grp.meta["color"] = colors[i % len(colors)]  # type: ignore
 
         app_obj: Object = parser.scad_id_to_scad_obj[app.id]  # type: ignore
@@ -342,16 +478,16 @@ def application_view(parser: AndroidParser):
         bounding_boxes[app_grp] = BoundingBox(x_min=-300)
         # Permissions
 
-        activity_grp: Group = app_view.create_group(
+        activity_grp: Group = view.create_group(
             name="Activities", icon=default_icon, x=-200, y=200
         )
-        provider_grp: Group = app_view.create_group(
+        provider_grp: Group = view.create_group(
             name="Content Providers", icon=default_icon, x=-400, y=200
         )
-        servicer_grp: Group = app_view.create_group(
+        servicer_grp: Group = view.create_group(
             name="Services", icon=default_icon, x=200, y=200
         )
-        receiver_grp: Group = app_view.create_group(
+        receiver_grp: Group = view.create_group(
             name="Receivers", icon=default_icon, x=400, y=200
         )
 

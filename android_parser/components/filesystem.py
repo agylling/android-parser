@@ -73,7 +73,7 @@ class FileSystem:
         object.__setattr__(
             self,
             "_internal_storage_dir",
-            create_volume(name="", volume=Volume.INTERNAL),
+            create_volume(name="/", volume=Volume.INTERNAL),
         )
         object.__setattr__(
             self,
@@ -258,6 +258,7 @@ def _path(data: Union[Directory, File]) -> str:
         components.append("")
     else:
         components.append("sdcard")
+    components[0] = "" if components[0] == "/" else components[0]
     return "/".join(components[::-1])
 
 

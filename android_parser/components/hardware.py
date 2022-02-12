@@ -50,6 +50,9 @@ class Device(Base):
     def asset_type(self) -> str:
         return "Device"
 
+    def all_hardware_components(self) -> List[Union[Microphone, GPS, CameraModule]]:
+        return [x for x in [self.microphone, self.gps, self.camera_module] if x]
+
     def create_scad_objects(self, parser: AndroidParser) -> None:
         """Creates an Application androidLang securiCAD object
         \nKeyword arguments:

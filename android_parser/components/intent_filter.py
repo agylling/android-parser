@@ -8,6 +8,7 @@ from android_parser.components.android_classes import Base
 from android_parser.utilities import xml as _xml
 
 if TYPE_CHECKING:
+    from android_parser.components.android_classes import BaseComponent
     from android_parser.components.application import AndroidComponent, Application
     from android_parser.main import AndroidParser
 
@@ -276,6 +277,14 @@ class IntentFilter(Base):
     def name(self) -> str:
         return f"IntentFilter"
 
+    @property  # type: ignore
+    def parent(self) -> BaseComponent:
+        return self._parent
+
+    @parent.setter
+    def parent(self, parent: BaseComponent) -> None:
+        self._parent = parent
+
     def __post_init__(self):
         object.__setattr__(self, "uris", self.__create_uris())
 
@@ -396,12 +405,26 @@ class IntentFilter(Base):
         super().create_scad_objects(parser)
         # TODO: Can probably create globally unique URIs
         parser.create_object(asset_type="IntentFilter", python_obj=self)
+        app: Application = self.parent.parent
         for i, category in enumerate(self.categories):
-            category.create_scad_objects(parser=parser)
+            if category.name in app.categories:
+                # to prevent duplicate objects in model
+                self.categories[i] = app.categories[category.name]
+            else:
+                category.create_scad_objects(parser=parser)
+                app.categories[category.name] = category
         for i, action in enumerate(self.actions):
-            action.create_scad_objects(parser=parser)
+            if action.name in app.actions:
+                self.actions[i] = app.actions[action.name]
+            else:
+                action.create_scad_objects(parser=parser)
+                app.actions[action.name] = action
         for i, uri in enumerate(self.uris):
-            uri.create_scad_objects(parser=parser)
+            if uri.name in app.uris:
+                self.uris[i] = app.uris[uri.name]
+            else:
+                uri.create_scad_objects(parser=parser)
+                app.uris[uri.name] = uri
         # TODO order
         # TODO priority
 

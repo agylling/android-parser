@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import logging
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 log = logging.getLogger("android-parser")
 
 
-def init_logging(quiet: bool, verbose: bool) -> None:
+def init_logging(log: Logger, quiet: bool, verbose: bool = True) -> None:
     if verbose:
         log.setLevel(logging.DEBUG)
     elif quiet:
