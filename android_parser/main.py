@@ -48,6 +48,7 @@ class AndroidParser:
     malicious_application: MaliciousApp = field(default=None, init=False)  # type: ignore
     _attacker: Object = field(default=None, init=False)  # type: ignore
     scad_id_to_scad_obj: Dict[int, Object] = field(default_factory=dict, init=False)
+    scad_id_to_python_obj: Dict[int, Any] = field(default_factory=dict, init=False)
     # An incremental id variable for objects
     object_id: int = field(default=0, init=False)
 
@@ -123,11 +124,24 @@ class AndroidParser:
             output_path = output_path.with_suffix(".sCAD")  # making sure correct suffix
             self.model
             scad_serializer.serialize_model(self.model, output_path)
+        # python objects used to build the model in dict format
+        json_rep: Dict[Any, Any] = {}
+        for obj in self.scad_id_to_python_obj.values():
+            idx: str = obj.name if hasattr(obj, "name") else str(obj.id)
+            try:
+                json_rep[idx] = obj.to_dict()  # type: ignore
+            except AttributeError:
+                json_rep[idx] = obj.name  # type: ignore
+        output_path = output_path.with_name(
+            f"{output_path.name}_python_rep"
+        ).with_suffix(".json")
+        with open(output_path, "w") as f:
+            json.dump(json_rep, f, indent=4, sort_keys=True)
 
         if not output_path:
             sys.exit(1)
 
-    def parse(self, metadata: dict[str, Any]) -> Dict[str, Any]:
+    def parse(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         try:
             with next(
                 iter(Path(__file__).parent.glob("org.foreseeti.androidLang-*.mar"))
@@ -154,6 +168,11 @@ class AndroidParser:
         self._connect_scad_objects()
         # generate default views
         view_generation.generate_views(parser=self)
+        # Fetch possible intents for each component
+        for manifest in self.manifests.values():
+            app = manifest.application
+            for component in app.components:
+                component.get_intents()
 
     def collect(self, input: BinaryIO) -> None:
         """Collects information of an AndroidManifest file wrapped in a Manifest object"""
@@ -247,6 +266,7 @@ class AndroidParser:
             self.scad_id_to_scad_obj[scad_obj.id] = scad_obj
             if python_obj:
                 python_obj.id = scad_obj.id
+                self.scad_id_to_python_obj[python_obj.id] = python_obj
             # self.object_id += 1
             return scad_obj
         except InvalidAssetException as e:

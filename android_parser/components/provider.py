@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 from xml.etree.ElementTree import Element
 
 from android_parser.components.android_classes import (
@@ -152,6 +152,25 @@ class Provider(BaseComponent):
         provider_obj.defense("wontGrantURIPermissions").probability = (
             0.0 if self.wontGrantURIPermissions else 1.0
         )
+
+    def _get_adb_intents(
+        self, partial_intents: Set[str], options: bool = True
+    ) -> List[str]:
+        final_intents: List[str] = []
+        option_flags: str = "--user all" if options else ""
+        for path in [y for x in self.path_permissions for y in x.paths]:
+            uri = f"content://{self.name}/{path}"
+            for partial_intent in partial_intents:  # type: ignore
+                final_intents.append(
+                    f"adb shell content read --uri {uri} {option_flags} {partial_intent} -n {self.manifest_parent.package}/{self.name} > file.ext"
+                )
+                final_intents.append(
+                    f"adb shell content write --uri {uri} {option_flags} {partial_intent} -n {self.manifest_parent.package}/{self.name} < file.ext "
+                )
+                final_intents.append(
+                    f"adb shell content delete --uri {uri} {option_flags} {partial_intent} -n {self.manifest_parent.package}/{self.name}"
+                )
+        return final_intents
 
 
 @dataclass(eq=True)

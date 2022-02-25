@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Set
 from xml.etree.ElementTree import Element
 
 from android_parser.components.android_classes import (
@@ -92,3 +92,14 @@ class Receiver(BaseComponent):
         receiver.defense("notContextRegistered").probability = (
             0.0 if self.context_registered else 1.0
         )
+
+    def _get_adb_intents(
+        self, partial_intents: Set[str], options: bool = True
+    ) -> List[str]:
+        final_intents: List[str] = []
+        option_flags: str = "--user all" if options else ""
+        for partial_intent in partial_intents:  # type: ignore
+            final_intents.append(
+                f"adb shell broadcast {option_flags} {partial_intent} -n {self.manifest_parent.package}/{self.name}"
+            )
+        return final_intents

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from android_parser.components.android_classes import Base
 from android_parser.utilities import constants as constants
@@ -49,6 +49,21 @@ class FileSystem:
     _media_store: SharedStorage = field(default=None, init=False)  # type: ignore
     paths: Dict[str, Object] = field(default_factory=dict, init=False)
     scoped_storage: Dict[str, ScopedStorage] = field(default_factory=dict, init=False)
+
+    def to_dict(self) -> Dict[Any, Any]:
+        def has_id_type(object: Any) -> bool:
+            return True if hasattr(object, "id") else False
+
+        attributes = {attrib: value for attrib, value in self.__dict__.items()}
+        for key, attrib in attributes.items():
+            if isinstance(attrib, list):
+                attrib = [{"scad_id": x.id} if has_id_type(x) else x for x in attrib]  # type: ignore
+            elif isinstance(attrib, dict):
+                pass
+            else:
+                attrib = {"scad_id": attrib.id} if has_id_type(attrib) else attrib
+            attributes[key] = attrib
+        return attributes
 
     def __post_init__(self) -> None:
         def create_volume(name: str, volume: Volume) -> Directory:

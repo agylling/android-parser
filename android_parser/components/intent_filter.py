@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 from xml.etree.ElementTree import Element
 
 from android_parser.components.android_classes import Base
@@ -380,8 +380,8 @@ class IntentFilter(Base):
         """Returns a list of IntentFilter objects found within the parent xml tag
         \n Keyword arguments:
         \t parent - an android component xml tag, e.g. service, activity, receiver or provider
-        \n Returns
-            A list if IntentFilter objects
+        \n Returns:
+        \t A list if IntentFilter objects
         """
         intent_filters: List[IntentFilter] = []
         for intent_filter in parent.findall("intent-filter"):
@@ -390,16 +390,40 @@ class IntentFilter(Base):
             )
         return intent_filters
 
-    def print_partial_intent(self) -> List[str]:
+    def print_partial_intent(self) -> Tuple[Set[str], Set[str]]:
         """Prints the intent filter part of an intent, meaning the actions, categories and uris\n"""
+        package: str = self.parent.manifest_parent.package
+
+        def browser_intent(action: str, uri: Optional[URI] = None) -> str:
+            """Prints the intent that matches the intent filter as if it was sent from a browser
+            \n Keyword arguments:
+            \t action - the intent action
+            \t uri - a matching uri for the intent filter
+            \n Returns:
+            \t A href uri for starting the intent via a web browser
+            """
+            # https://developer.chrome.com/docs/multidevice/android/intents/
+            scheme = uri.name.split(":")[0] if uri else ""
+            components: List[str] = uri.name.split(" ") if uri else [""]  # type: ignore
+            host_uri_path = components[0].replace(f"{scheme}://", "")
+            mime_type = None
+            if "-t" in components:
+                idx = components.index("-t")
+                mime_type = components[idx + 1]
+            return f"intent://{host_uri_path}/#Intent;package={package};action={action};component={self.parent.name};{f'type={mime_type};' if mime_type else ''}{f'scheme={scheme};' if scheme else ''}S.browser_fallback_url=https%3A%2F%2Fgoogle.com;end;"
+
         # https://developer.android.com/studio/command-line/adb#IntentSpec
-        partial_intent_strings: Set[str] = set()
+        partial_adb_intent_strings: Set[str] = set()
+        chrome_intents: Set[str] = set()
         for action in self.actions:
-            for category in self.categories:
-                for uri in self.uris:
+            for category in self.categories or [None]:
+                for uri in self.uris or [None]:
                     # mime type flags (-t) are already hardcoded into the uri
-                    partial_intent_strings.add(f"-a {action} -c {category} -d {uri}")
-        return list(partial_intent_strings)
+                    partial_adb_intent_strings.add(
+                        f"-a {action.name} {f'-c {category.name}' if category else ''} {f'-d {uri}' if uri else 'www.example.com'}"
+                    )
+                    chrome_intents.add(browser_intent(action=action.name, uri=uri))
+        return (partial_adb_intent_strings, chrome_intents)
 
     def create_scad_objects(self, parser: AndroidParser) -> None:
         super().create_scad_objects(parser)

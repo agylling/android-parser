@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 from xml.etree.ElementTree import Element
 
 from android_parser.utilities import constants as constants
@@ -31,6 +31,21 @@ class Base:
 
     def __post_init__(self) -> None:
         pass
+
+    def to_dict(self) -> Dict[Any, Any]:
+        def has_id_type(object: Any) -> bool:
+            return True if hasattr(object, "id") else False
+
+        attributes = {attrib: value for attrib, value in self.__dict__.items()}
+        for key, attrib in attributes.items():
+            if isinstance(attrib, list):
+                attrib = [{"scad_id": x.id} if has_id_type(x) else x for x in attrib]  # type: ignore
+            elif isinstance(attrib, dict):
+                pass
+            else:
+                attrib = {"scad_id": attrib.id} if has_id_type(attrib) else attrib
+            attributes[key] = attrib
+        return attributes
 
     @property
     def id(self) -> Optional[int]:
@@ -456,6 +471,13 @@ class BaseComponent(Base):
                 continue
             component.parent = self
 
+    def to_dict(self) -> Dict[Any, Any]:
+        attributes = super().to_dict()
+        adb_intents, web_intents = self.get_intents()
+        attributes["adbIntents"] = adb_intents
+        attributes["chromeIntents"] = web_intents
+        return attributes
+
     @property
     def permission(self) -> Optional[str]:
         return self.attributes.get("permission")  # type: ignore
@@ -561,3 +583,26 @@ class BaseComponent(Base):
         # Intent_filters
         for intent_filter in self.intent_filters:
             intent_filter.connect_scad_objects(parser=parser)
+
+    def get_intents(self) -> Tuple[List[str], List[str]]:
+        """Returns a list of potentially possible intents to access to component"""
+        total_partial_adb_intents: Set[str] = set()
+        total_browser_intents: Set[str] = set()
+        for intent_filter in self.intent_filters:
+            adb_intents, chrome_intents = intent_filter.print_partial_intent()
+            total_partial_adb_intents.union(adb_intents)
+            total_browser_intents.union(chrome_intents)
+        total_adb_intents: List[str] = self._get_adb_intents(
+            partial_intents=total_partial_adb_intents
+        )
+        return (total_adb_intents, list(total_browser_intents))  # type: ignore
+
+    def _get_adb_intents(
+        self, partial_intents: Set[str], options: bool = True
+    ) -> List[str]:
+        """Returns a list of potential valid intents using adb commands for the components that matches its intent filters
+        \n Keyword arguments:
+        \t partial_intents - a set of partially done intent strings from the components intent_filters.print_partial_intent()[0]
+        \t options - to include predefined options flags defined defined in the component's definition of this function
+        """
+        ...

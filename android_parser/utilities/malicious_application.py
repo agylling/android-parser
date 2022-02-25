@@ -78,3 +78,6 @@ class MaliciousApp(Base):
             parser.create_associaton(
                 s_obj=mal_app, t_obj=intent, s_field="intents", t_field="app"
             )
+
+        # To create a valid model
+        mal_app.attack_step("createMaliciousIntents").meta["consequence"] = 1  # type: ignore

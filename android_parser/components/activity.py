@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Optional, Set
 from xml.etree.ElementTree import Element
 
 from android_parser.components.android_classes import (
@@ -97,3 +99,19 @@ class Activity(BaseComponent):
 
     def connect_scad_objects(self, parser: AndroidParser) -> None:
         super().connect_scad_objects(parser)
+
+    def _get_adb_intents(
+        self, partial_intents: Set[str], options: bool = True
+    ) -> List[str]:
+        final_intents: List[str] = []
+        profiler_path = Path(os.path.abspath(__file__)).parent.parent.joinpath(
+            "/profiler.txt"
+        )
+        option_flags: str = (
+            f"--start-profiler {profiler_path.absolute().name}" if options else ""
+        )
+        for partial_intent in list(partial_intents):  # type: ignore
+            final_intents.append(
+                f"adb shell am start {option_flags} {partial_intent} -n {self.manifest_parent.package}/{self.name}"
+            )
+        return final_intents

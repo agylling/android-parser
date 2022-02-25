@@ -8,7 +8,7 @@ attrs==21.4.0
     # via jsonschema
 certifi==2021.10.8
     # via requests
-charset-normalizer==2.0.11
+charset-normalizer==2.0.12
     # via requests
 click==8.0.3
     # via typer
@@ -20,7 +20,7 @@ importlib-resources==5.4.0
     # via jsonschema
 jsonschema==4.4.0
     # via securicad-model
-lxml==4.7.1
+lxml==4.8.0
     # via pyecore
 ordered-set==4.1.0
     # via pyecore
