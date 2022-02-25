@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.isort]
+py_version = "38"
+virtual_env = "venv"
+profile = "black"
+
+[tool.black]
+target-version = ["py38"]
+
+[tool.pyright]
+venvPath = "."
+venv = "venv"
+pythonVersion = "3.8"
+typeCheckingMode = "strict"
+reportImportCycles = false
+reportPrivateUsage = false
+
+[tool.mypy]
+python_version = "3.8"
+pretty = true
+strict = true
+
+[tool.pylint.master]
+py-version = "3.8"
+jobs = 0
+
+[tool.pylint.messages_control]
+disable = [
+  "C0114", # missing-module-docstring
+  "C0115", # missing-class-docstring
+  "C0116", # missing-function-docstring
+  "C0414", # useless-import-alias
+  "W0212", # protected-access
+]
+
+[tool.pylint.basic]
+good-names = ["i", "j", "k", "ex", "Run", "_", "f", "op"]
+
+[tool.pylint.format]
+max-line-length = 88

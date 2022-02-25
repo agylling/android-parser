@@ -1,0 +1,421 @@
+{
+    "scenarios": [
+        {
+            "name": "ExportedServices",
+            "tunings": [
+                {
+                    "tuning_type": "probability",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Service",
+                        "defense": "NotUsingIntentExtras"
+                    },
+                    "probability": 1
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Service",
+                        "attackstep": "StartComponent"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Service",
+                        "attackstep": "StartableImplicitly"
+                    },
+                    "consequence": 7
+                }
+            ]
+        },
+        {
+            "name": "ExportedActivities",
+            "tunings": [
+                {
+                    "tuning_type": "probability",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Activity",
+                        "defense": "NotUsingIntentExtras"
+                    },
+                    "probability": 1
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Activity",
+                        "attackstep": "StartComponent"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Activity",
+                        "attackstep": "StartableImplicitly"
+                    },
+                    "consequence": 7
+                }
+            ]
+        },
+        {
+            "name": "ExportedProviders",
+            "tunings": [
+                {
+                    "tuning_type": "probability",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "defense": "NotUsingIntentExtras"
+                    },
+                    "probability": 1
+                },
+                {
+                    "tuning_type": "probability",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "defense": "WontGrantURIPermissions"
+                    },
+                    "probability": 1
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "attackstep": "StartComponent"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "attackstep": "StartableImplicitly"
+                    },
+                    "consequence": 7
+                }
+            ]
+        },
+        {
+            "name": "ExportedBroadcastReceivers",
+            "tunings": [
+                {
+                    "tuning_type": "probability",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "BroadcastReceiver",
+                        "defense": "NotUsingIntentExtras"
+                    },
+                    "probability": 1
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "BroadcastReceiver",
+                        "attackstep": "StartComponent"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "BroadcastReceiver",
+                        "attackstep": "StartableImplicitly"
+                    },
+                    "consequence": 7
+                }
+            ]
+        },
+        {
+            "name": "HardwareAccess",
+            "tunings": [
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Gps",
+                        "attackstep": "GetFineLocation"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Gps",
+                        "attackstep": "GetCoarseLocation"
+                    },
+                    "consequence": 6
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "CameraModule",
+                        "attackstep": "CaptureVideo"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "CameraModule",
+                        "attackstep": "CapturePhoto"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Microphone",
+                        "attackstep": "RecordAudio"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Dialer",
+                        "attackstep": "ReadCallHistory"
+                    },
+                    "consequence": 6
+                }
+            ]
+        },
+        {
+            "name": "ExploitSystemApps",
+            "description": "The attacker attempts to utilize permissions of installed apps or system vulnerabilities to access system apps",
+            "tunings": [
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Email",
+                        "attackstep": "ReadMail"
+                    },
+                    "consequence": 8
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Email",
+                        "attackstep": "WriteMail"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Camera",
+                        "attackstep": "Access"
+                    },
+                    "consequence": 3
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "MediaStore",
+                        "attackstep": "CreateWriteRequest"
+                    },
+                    "consequence": 3
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "MediaStore",
+                        "attackstep": "CreateDeleteRequest"
+                    },
+                    "consequence": 6
+                }
+            ]
+        },
+        {
+            "name": "DenialOfService",
+            "tunings": [
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Device",
+                        "attackstep": "DenialOfService"
+                    },
+                    "consequence": 6
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Device",
+                        "attackstep": "ConsumeBattery"
+                    },
+                    "consequence": 3
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Service",
+                        "attackstep": "HoldProcess"
+                    },
+                    "consequence": 6
+                }
+            ]
+        },
+        {
+            "name": "Browsable",
+            "description": "Checks which components are accessible from a webbrowser, meaning a 1 click vulnerability",
+            "tunings": [
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Service",
+                        "attackstep": "StartableFromBrowser"
+                    },
+                    "consequence": 7
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Activity",
+                        "attackstep": "StartableFromBrowser"
+                    },
+                    "consequence": 7
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "attackstep": "StartableFromBrowser"
+                    },
+                    "consequence": 7
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "BroadcastReceiver",
+                        "attackstep": "StartableFromBrowser"
+                    },
+                    "consequence": 7
+                }
+            ]
+        },
+        {
+            "name": "AccessAppContent",
+            "description": "Checks which parts of the app causes it to leak unauthorized access to the content",
+            "tunings": [
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "attackstep": "QueryData"
+                    },
+                    "consequence": 10
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ContentProvider",
+                        "attackstep": "ModifyData"
+                    },
+                    "consequence": 8
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ScopedStorage",
+                        "attackstep": "ReadFiles"
+                    },
+                    "consequence": 6
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "ScopedStorage",
+                        "attackstep": "WriteFiles"
+                    },
+                    "consequence": 5
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Database",
+                        "attackstep": "Write"
+                    },
+                    "consequence": 2
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Database",
+                        "attackstep": "Delete"
+                    },
+                    "consequence": 5
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "Database",
+                        "attackstep": "Read"
+                    },
+                    "consequence": 7
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "SharedStorage",
+                        "attackstep": "Read"
+                    },
+                    "consequence": 6
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "SharedStorage",
+                        "attackstep": "Write"
+                    },
+                    "consequence": 3
+                },
+                {
+                    "tuning_type": "consequence",
+                    "op": "apply",
+                    "filterdict": {
+                        "metaconcept": "SharedStorage",
+                        "attackstep": "Delete"
+                    },
+                    "consequence": 5
+                }
+            ]
+        }
+    ]
+}
